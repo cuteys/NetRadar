@@ -55,6 +55,12 @@ const cancelRename = (event: Event) => {
   editingIp.value = null
 }
 
+const getNodeName = (nodeId?: string) => {
+  if (!nodeId) return ''
+  const n = (radar.nodes || []).find((item) => item.id === nodeId)
+  return n ? n.name : ''
+}
+
 const toggleSelectDevice = (ip: string) => {
   if (radar.selectedDeviceIp === ip) {
     radar.selectedDeviceIp = ''
@@ -83,7 +89,7 @@ const toggleSelectDevice = (ip: string) => {
     <div class="flex-1 overflow-y-auto space-y-2 pr-1">
       <div
         v-for="dev in radar.topDevices"
-        :key="dev.ip"
+        :key="(dev.node_id || '') + ':' + dev.ip"
         @click="toggleSelectDevice(dev.ip)"
         class="p-2.5 rounded-2xl border transition-all cursor-pointer"
         :class="radar.selectedDeviceIp === dev.ip
@@ -119,9 +125,15 @@ const toggleSelectDevice = (ip: string) => {
                 </button>
               </div>
 
-              <div v-else class="flex items-center gap-1.5 min-w-0">
+              <div v-else class="flex items-center gap-1.5 min-w-0 flex-wrap">
                 <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate font-mono">
                   {{ dev.name }}
+                </span>
+                <span
+                  v-if="radar.selectedNodeId === 'all' && dev.node_id"
+                  class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-normal truncate"
+                >
+                  {{ getNodeName(dev.node_id) }}
                 </span>
                 <span
                   v-if="dev.is_custom && dev.name !== dev.ip"

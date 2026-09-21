@@ -21,10 +21,17 @@ const timeRanges: { label: string; value: 'realtime' | '1h' | '24h' | '7d' }[] =
   { label: '7天', value: '7d' },
 ]
 
+const getNodeName = (nodeId?: string) => {
+  if (!nodeId) return ''
+  const n = (radar.nodes || []).find((item) => item.id === nodeId)
+  return n ? n.name : ''
+}
+
 const setTimeRange = (val: 'realtime' | '1h' | '24h' | '7d') => {
   radar.selectedTimeRange = val
   radar.fetchCumulativeStats()
   if (val !== 'realtime') {
+    radar.fetchHistory(val)
     radar.fetchHistoricalDestinations(val)
   }
 }
@@ -32,6 +39,7 @@ const setTimeRange = (val: 'realtime' | '1h' | '24h' | '7d') => {
 watch(() => radar.selectedNodeId, () => {
   radar.fetchCumulativeStats()
   if (radar.selectedTimeRange !== 'realtime') {
+    radar.fetchHistory()
     radar.fetchHistoricalDestinations()
   }
 })
@@ -40,11 +48,18 @@ const deviceOptions = computed<DropdownOption[]>(() => {
   const list: DropdownOption[] = [
     { label: '全部内网终端', value: '' },
   ]
-  for (const dev of radar.topDevices) {
+  const isAll = radar.selectedNodeId === 'all'
+  const filtered = isAll
+    ? radar.topDevices
+    : radar.topDevices.filter((d) => !d.node_id || d.node_id === radar.selectedNodeId)
+
+  for (const dev of filtered) {
+    const nodeName = isAll && dev.node_id ? getNodeName(dev.node_id) : ''
+    const sub = nodeName ? `${dev.ip} · ${nodeName}` : (dev.ip !== dev.name ? dev.ip : undefined)
     list.push({
       label: dev.name,
       value: dev.ip,
-      sublabel: dev.ip !== dev.name ? dev.ip : undefined,
+      sublabel: sub,
     })
   }
   return list

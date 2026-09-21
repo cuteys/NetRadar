@@ -22,7 +22,7 @@ const palette = [
 
 const itemsList = computed(() => {
   const isProto = viewMode.value === 'proto'
-  const source = isProto ? radar.protoDist : radar.countryDist
+  const source = isProto ? radar.effectiveProtoDist : radar.effectiveCountryDist
 
   let total = 0
   const list: { name: string; value: number; percent: number; color: string }[] = []
@@ -160,8 +160,9 @@ onUnmounted(() => {
   chart = null
 })
 
-watch(() => radar.protoDist, () => updateChart())
-watch(() => radar.countryDist, () => updateChart())
+watch(() => radar.effectiveProtoDist, () => updateChart())
+watch(() => radar.effectiveCountryDist, () => updateChart())
+watch(() => radar.selectedTimeRange, () => updateChart())
 watch(() => theme.isDark, () => updateChart())
 </script>
 

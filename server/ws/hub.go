@@ -310,6 +310,7 @@ func (h *Hub) processAgentPayload(p *model.NodeMetricsPayload, node *model.NodeI
 			ID:        flow.ID,
 			NodeID:    p.NodeID,
 			SrcIP:     flow.SrcIP,
+			SrcPort:   flow.SrcPort,
 			DstIP:     flow.DstIP,
 			DstPort:   flow.DstPort,
 			Protocol:  flow.Protocol,
@@ -324,7 +325,7 @@ func (h *Hub) processAgentPayload(p *model.NodeMetricsPayload, node *model.NodeI
 		}
 		particleFlows = append(particleFlows, pf)
 
-		if flow.SrcIP != "" && flow.SrcIP != "Gateway" {
+		if flow.SrcIP != "" {
 			h.mu.Lock()
 			dev, ok := lanDevices[flow.SrcIP]
 			if !ok {

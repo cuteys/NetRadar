@@ -126,6 +126,7 @@ type ParticleFlow struct {
 	ID        string     `json:"id"`
 	NodeID    string     `json:"node_id"`
 	SrcIP     string     `json:"src_ip"`
+	SrcPort   int        `json:"src_port"`
 	DstIP     string     `json:"dst_ip"`
 	DstPort   int        `json:"dst_port"`
 	Protocol  string     `json:"protocol"`

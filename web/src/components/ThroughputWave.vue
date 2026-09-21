@@ -182,6 +182,10 @@ watch(() => radar.historyPoints, () => {
   updateData()
 })
 
+watch(() => radar.selectedTimeRange, () => {
+  updateData()
+})
+
 watch(() => theme.isDark, () => {
   initChart()
 })
@@ -196,7 +200,7 @@ watch(() => theme.isDark, () => {
           <Activity class="w-4 h-4 text-emerald-500" />
         </div>
         <h3 class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 whitespace-nowrap">
-          实时吞吐波形
+          {{ radar.selectedTimeRange === 'realtime' ? '实时吞吐波形' : '区间吞吐历史' }}
         </h3>
       </div>
 
@@ -205,12 +209,12 @@ watch(() => theme.isDark, () => {
         <div class="flex items-center gap-0.5 sm:gap-1 text-emerald-600 dark:text-emerald-400 font-medium whitespace-nowrap">
           <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500"></span>
           <ArrowDown class="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-          <span>{{ formatSpeed(radar.currentRateIn) }}</span>
+          <span>{{ radar.selectedTimeRange === 'realtime' ? formatSpeed(radar.currentRateIn) : '下行吞吐' }}</span>
         </div>
         <div class="flex items-center gap-0.5 sm:gap-1 text-sky-600 dark:text-sky-400 font-medium whitespace-nowrap">
           <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-sky-500"></span>
           <ArrowUp class="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-          <span>{{ formatSpeed(radar.currentRateOut) }}</span>
+          <span>{{ radar.selectedTimeRange === 'realtime' ? formatSpeed(radar.currentRateOut) : '上行吞吐' }}</span>
         </div>
       </div>
     </div>

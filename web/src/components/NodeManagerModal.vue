@@ -57,12 +57,12 @@ const installCommand = computed(() => {
   const token = radar.systemSettings?.agent_token || 'netradar_secret_token_12345'
   const tls = radar.systemSettings?.use_tls ? ' --tls' : ''
   const proxyPrefix = useGhProxy.value ? 'https://gh-proxy.com/' : ''
-  return `curl -sSL ${proxyPrefix}https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh | bash -s -- -s "${host}" -t "${token}"${tls}`
+  return `curl -fsSL -k ${proxyPrefix}https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh | sh -s -- -s "${host}" -t "${token}"${tls}`
 })
 
 const uninstallCommand = computed(() => {
   const proxyPrefix = useGhProxy.value ? 'https://gh-proxy.com/' : ''
-  return `curl -sSL ${proxyPrefix}https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh | bash -s -- --uninstall`
+  return `curl -fsSL -k ${proxyPrefix}https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh | sh -s -- --uninstall`
 })
 
 const rawBinaryCommand = computed(() => {

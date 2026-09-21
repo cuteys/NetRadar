@@ -423,5 +423,5 @@ printf "\n${GREEN}==============================================================
 printf "${GREEN}   NetRadar Agent 探针安装完成！${NC}\n"
 printf "   服务端: ${WS_URL}\n"
 printf "   路径  : ${AGENT_BIN}\n"
-printf "   卸载  : curl -sSL https://raw.githubusercontent.com/${GITHUB_REPO}/master/install-agent.sh | bash -s -- --uninstall\n"
+printf "   卸载  : curl -fsSL -k https://raw.githubusercontent.com/${GITHUB_REPO}/master/install-agent.sh | sh -s -- --uninstall\n"
 printf "${GREEN}===================================================================${NC}\n\n"

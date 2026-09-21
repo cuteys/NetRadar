@@ -359,12 +359,14 @@ const resizeCanvas = () => {
 
 const buildSeries = (scatterData: any[] = [], isHistorical = false): any[] => {
   const colors = getThemeColors()
-  const origin = gatewayCoord.value
-  const currentNodeName = radar.activeNode?.name || ''
-
   const series: any[] = []
 
-  if (origin && currentNodeName) {
+  const isAll = radar.selectedNodeId === 'all'
+  const nodesToShow = isAll
+    ? (radar.nodes || []).filter((n) => n.is_online && n.gateway_lng && n.gateway_lat)
+    : (radar.activeNode && radar.activeNode.gateway_lng && radar.activeNode.gateway_lat ? [radar.activeNode] : [])
+
+  if (nodesToShow.length > 0) {
     series.push({
       type: 'scatter',
       coordinateSystem: 'geo',
@@ -380,17 +382,15 @@ const buildSeries = (scatterData: any[] = [], isHistorical = false): any[] => {
       label: {
         show: true,
         position: 'right',
-        formatter: () => currentNodeName,
+        formatter: (params: any) => params.name,
         color: theme.isDark ? '#e2e8f0' : '#334155',
         fontSize: 12,
         fontWeight: 600,
       },
-      data: [
-        {
-          name: currentNodeName,
-          value: [origin[0], origin[1]],
-        },
-      ],
+      data: nodesToShow.map((n) => ({
+        name: n.name,
+        value: [n.gateway_lng, n.gateway_lat],
+      })),
     })
   }
 
@@ -532,11 +532,12 @@ const syncMapData = (immediate = false) => {
     const p1 = immediate ? null : (existing?.p1 || null)
     const control = immediate ? null : (existing?.control || null)
 
-    if (origin) {
+    const trackOrigin = (f.from_coord && f.from_coord[0] && f.from_coord[1]) ? f.from_coord : origin
+    if (trackOrigin) {
       newTracks.push({
         key,
         color,
-        originCoord: origin,
+        originCoord: trackOrigin,
         targetCoord: [f.to_coord[0], f.to_coord[1]],
         p0,
         p1,

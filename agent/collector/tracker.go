@@ -80,8 +80,8 @@ func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackE
 			bytesIn = e.Bytes1
 			bytesOut = e.Bytes2
 		} else {
-			// 网关本身对外通信
-			lanIP = "Gateway"
+			// 网关本身对外通信或双端非内网
+			lanIP = e.Src1
 			lanPort = e.Sport1
 			wanIP = e.Dst1
 			wanPort = e.Dport1
@@ -139,7 +139,7 @@ func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackE
 			activeFlows = append(activeFlows, flowRecord)
 
 			// 统计局域网终端流量
-			if lanIP != "Gateway" {
+			if lanIP != "" {
 				dev, ok := dt.deviceTotals[lanIP]
 				if !ok {
 					dev = &model.DeviceStats{
