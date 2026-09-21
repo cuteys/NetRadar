@@ -111,7 +111,7 @@ while [ $# -gt 0 ]; do
             ;;
         -h|--help|-help)
             echo "用法:"
-            echo "  安装: $0 -s <Server地址:端口> -t <通信密钥Token> [-n <节点名称>] [--tls]"
+            echo "  安装: $0 -s <Server地址:端口> -t <通信密钥Token> [--tls]"
             echo "  卸载: $0 --uninstall"
             exit 0
             ;;
@@ -336,7 +336,7 @@ RUNNER_SCRIPT="${INSTALL_DIR}/start_agent.sh"
 cat << EOF > "$RUNNER_SCRIPT"
 #!/bin/sh
 if ! pgrep -f "${AGENT_BIN}.*-server" >/dev/null 2>&1; then
-    nohup ${AGENT_BIN} -server "${WS_URL}" -token "${AGENT_TOKEN}" -node-name "${NODE_NAME}" >/dev/null 2>&1 &
+    nohup ${AGENT_BIN} -server "${WS_URL}" -token "${AGENT_TOKEN}" >/dev/null 2>&1 &
 fi
 EOF
 chmod +x "$RUNNER_SCRIPT"
@@ -351,7 +351,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=${INSTALL_DIR}
-ExecStart=${AGENT_BIN} -server "${WS_URL}" -token "${AGENT_TOKEN}" -node-name "${NODE_NAME}"
+ExecStart=${AGENT_BIN} -server "${WS_URL}" -token "${AGENT_TOKEN}"
 Restart=always
 RestartSec=3s
 LimitNOFILE=65535
@@ -373,7 +373,7 @@ STOP=10
 
 start_service() {
     procd_open_instance
-    procd_set_param command ${AGENT_BIN} -server "${WS_URL}" -token "${AGENT_TOKEN}" -node-name "${NODE_NAME}"
+    procd_set_param command ${AGENT_BIN} -server "${WS_URL}" -token "${AGENT_TOKEN}"
     procd_set_param respawn 3600 3 0
     procd_set_param stdout 1
     procd_set_param stderr 1
@@ -422,7 +422,6 @@ fi
 printf "\n${GREEN}===================================================================${NC}\n"
 printf "${GREEN}   NetRadar Agent 探针安装完成！${NC}\n"
 printf "   服务端: ${WS_URL}\n"
-printf "   节点名: ${NODE_NAME}\n"
 printf "   路径  : ${AGENT_BIN}\n"
 printf "   卸载  : curl -sSL https://raw.githubusercontent.com/${GITHUB_REPO}/master/install-agent.sh | bash -s -- --uninstall\n"
 printf "${GREEN}===================================================================${NC}\n\n"

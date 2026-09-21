@@ -232,7 +232,7 @@ func (d *Database) UpsertNode(node *model.NodeInfo) error {
 	INSERT INTO nodes (id, name, hostname, os, arch, ip, version, first_seen, last_seen, gateway_lat, gateway_lng, custom_location)
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(id) DO UPDATE SET
-		name=CASE WHEN excluded.name != '' THEN excluded.name ELSE nodes.name END,
+		name=CASE WHEN nodes.name != '' THEN nodes.name WHEN excluded.name != '' THEN excluded.name ELSE nodes.name END,
 		hostname=excluded.hostname,
 		os=excluded.os,
 		arch=excluded.arch,

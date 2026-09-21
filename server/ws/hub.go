@@ -129,9 +129,6 @@ func (h *Hub) HandleAgentWS(w http.ResponseWriter, r *http.Request) {
 	}
 	rawName := r.Header.Get("X-NetRadar-Node-Name")
 	nodeName, _ := url.QueryUnescape(rawName)
-	if nodeName == "" {
-		nodeName = nodeID
-	}
 
 	agentPublicIP := r.Header.Get("X-NetRadar-Public-IP")
 	var agentLat, agentLng float64
@@ -155,8 +152,6 @@ func (h *Hub) HandleAgentWS(w http.ResponseWriter, r *http.Request) {
 		effectiveIP = remoteIP
 	}
 
-	log.Printf("[Hub] 探针已连接: ID=%s 名称=%s 公网IP=%s (连接IP=%s)", nodeID, nodeName, effectiveIP, remoteIP)
-
 	h.mu.Lock()
 	node, exists := h.nodes[nodeID]
 	if !exists {
@@ -166,9 +161,13 @@ func (h *Hub) HandleAgentWS(w http.ResponseWriter, r *http.Request) {
 			lat = h.cfg.GatewayLat
 			lng = h.cfg.GatewayLng
 		}
+		displayName := nodeName
+		if displayName == "" {
+			displayName = nodeID
+		}
 		node = &model.NodeInfo{
 			ID:         nodeID,
-			Name:       nodeName,
+			Name:       displayName,
 			IP:         effectiveIP,
 			LastSeen:   time.Now(),
 			IsOnline:   true,
@@ -179,9 +178,6 @@ func (h *Hub) HandleAgentWS(w http.ResponseWriter, r *http.Request) {
 	} else {
 		node.IsOnline = true
 		node.LastSeen = time.Now()
-		if nodeName != "" {
-			node.Name = nodeName
-		}
 		if !node.CustomLocation {
 			if effectiveIP != "" {
 				node.IP = effectiveIP
@@ -192,6 +188,8 @@ func (h *Hub) HandleAgentWS(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	log.Printf("[Hub] 探针已连接: ID=%s 名称=%s 公网IP=%s (连接IP=%s)", nodeID, node.Name, effectiveIP, remoteIP)
 
 	if _, ok := h.nodeLANMap[nodeID]; !ok {
 		h.nodeLANMap[nodeID] = make(map[string]*model.DeviceStats)
@@ -242,8 +240,13 @@ func (h *Hub) processAgentPayload(p *model.NodeMetricsPayload, node *model.NodeI
 	node.OS = p.OS
 	node.Arch = p.Arch
 
+	statusChanged := false
+	if (node.Name == "" || node.Name == node.ID) && p.Hostname != "" {
+		node.Name = p.Hostname
+		statusChanged = true
+	}
+
 	if !node.CustomLocation {
-		statusChanged := false
 		if p.PublicIP != "" && node.IP != p.PublicIP {
 			node.IP = p.PublicIP
 			statusChanged = true
@@ -253,10 +256,10 @@ func (h *Hub) processAgentPayload(p *model.NodeMetricsPayload, node *model.NodeI
 			node.GatewayLng = p.GatewayLng
 			statusChanged = true
 		}
-		if statusChanged {
-			_ = h.db.UpsertNode(node)
-			h.BroadcastNodeStatus()
-		}
+	}
+	if statusChanged {
+		_ = h.db.UpsertNode(node)
+		h.BroadcastNodeStatus()
 	}
 
 	_ = h.db.RecordTraffic(p.NodeID, p.Timestamp, p.TotalBytesIn, p.TotalBytesOut, p.RateInBps, p.RateOutBps, p.ActiveConns)

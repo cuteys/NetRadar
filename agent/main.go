@@ -20,7 +20,7 @@ func main() {
 	cfg := config.LoadConfig()
 
 	log.Printf("=== NetRadar 探针 (%s) ===", Version)
-	log.Printf("节点 ID:   %s (%s)", cfg.NodeID, cfg.NodeName)
+	log.Printf("节点 ID:   %s", cfg.NodeID)
 	log.Printf("系统架构:   %s/%s", runtime.GOOS, runtime.GOARCH)
 	log.Printf("目标服务:   %s", cfg.ServerURL)
 	log.Printf("上报周期:   %d 秒", cfg.Interval)
