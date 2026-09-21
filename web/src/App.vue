@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from './stores/authStore'
 import { useRadarStore } from './stores/radarStore'
+import { useThemeStore } from './stores/themeStore'
 import HeaderBar from './components/HeaderBar.vue'
 import CumulativeStatsBar from './components/CumulativeStatsBar.vue'
 import LoginView from './components/LoginView.vue'
@@ -13,16 +14,23 @@ import LiveLogStream from './components/LiveLogStream.vue'
 
 const auth = useAuthStore()
 const radar = useRadarStore()
+const theme = useThemeStore()
 
 onMounted(async () => {
   await auth.checkAuth()
   if (auth.isAuthenticated) {
+    radar.fetchNodes()
+    radar.fetchSystemSettings()
+    radar.fetchCumulativeStats()
     radar.connect()
   }
 })
 
 watch(() => auth.isAuthenticated, (val) => {
   if (val) {
+    radar.fetchNodes()
+    radar.fetchSystemSettings()
+    radar.fetchCumulativeStats()
     radar.connect()
   } else {
     radar.disconnect()

@@ -24,12 +24,12 @@ const activeTrackCount = ref(0)
 echarts.registerMap('world', worldGeoJson as any)
 echarts.registerMap('china', chinaGeoJson as any)
 
-const gatewayCoord = computed<[number, number]>(() => {
+const gatewayCoord = computed<[number, number] | null>(() => {
   const active = radar.activeNode
   if (active && active.gateway_lng && active.gateway_lat) {
     return [active.gateway_lng, active.gateway_lat]
   }
-  return [121.4737, 31.2304] // 默认坐标
+  return null
 })
 
 const getThemeColors = () => {
@@ -106,9 +106,8 @@ let lastFrameTime = 0
 // 实时流缓存，方便悬浮提示快速读取
 const flowDetailMap = new Map<string, any>()
 
-// 将经纬度转为屏幕像素坐标
-const projectGeoCoord = (coord: [number, number]): [number, number] | null => {
-  if (!chart || !isInitialized) return null
+const projectGeoCoord = (coord?: [number, number] | null): [number, number] | null => {
+  if (!chart || !isInitialized || !coord) return null
   try {
     const pt = chart.convertToPixel({ geoIndex: 0 }, coord)
     if (pt && Number.isFinite(pt[0]) && Number.isFinite(pt[1])) {
@@ -361,10 +360,12 @@ const resizeCanvas = () => {
 const buildSeries = (scatterData: any[] = [], isHistorical = false): any[] => {
   const colors = getThemeColors()
   const origin = gatewayCoord.value
-  const currentNodeName = radar.activeNode?.name || '本地网关'
+  const currentNodeName = radar.activeNode?.name || ''
 
-  return [
-    {
+  const series: any[] = []
+
+  if (origin && currentNodeName) {
+    series.push({
       type: 'scatter',
       coordinateSystem: 'geo',
       symbol: 'circle',
@@ -390,10 +391,12 @@ const buildSeries = (scatterData: any[] = [], isHistorical = false): any[] => {
           value: [origin[0], origin[1]],
         },
       ],
-    },
-    {
-      type: 'scatter',
-      coordinateSystem: 'geo',
+    })
+  }
+
+  series.push({
+    type: 'scatter',
+    coordinateSystem: 'geo',
       symbolSize: isHistorical ? 6.5 : 7.5,
       itemStyle: {
         borderColor: '#ffffff',
@@ -408,8 +411,9 @@ const buildSeries = (scatterData: any[] = [], isHistorical = false): any[] => {
         },
       },
       data: scatterData,
-    },
-  ]
+  })
+
+  return series
 }
 
 // 同步地图数据与散点图层
@@ -455,18 +459,20 @@ const syncMapData = (immediate = false) => {
         },
       })
 
-      const p0 = projectGeoCoord(origin)
-      const p1 = projectGeoCoord([h.to_coord[0], h.to_coord[1]])
-      const control = (p0 && p1) ? computeControlPoint(p0, p1) : null
+      if (origin) {
+        const p0 = projectGeoCoord(origin)
+        const p1 = projectGeoCoord([h.to_coord[0], h.to_coord[1]])
+        const control = (p0 && p1) ? computeControlPoint(p0, p1) : null
 
-      newHistTracks.push({
-        originCoord: origin,
-        targetCoord: [h.to_coord[0], h.to_coord[1]],
-        p0,
-        p1,
-        control,
-        color: dotColor,
-      })
+        newHistTracks.push({
+          originCoord: origin,
+          targetCoord: [h.to_coord[0], h.to_coord[1]],
+          p0,
+          p1,
+          control,
+          color: dotColor,
+        })
+      }
     }
 
     historicalTracks = newHistTracks
@@ -526,18 +532,20 @@ const syncMapData = (immediate = false) => {
     const p1 = immediate ? null : (existing?.p1 || null)
     const control = immediate ? null : (existing?.control || null)
 
-    newTracks.push({
-      key,
-      color,
-      originCoord: origin,
-      targetCoord: [f.to_coord[0], f.to_coord[1]],
-      p0,
-      p1,
-      control,
-      t,
-      speed,
-      flow: f,
-    })
+    if (origin) {
+      newTracks.push({
+        key,
+        color,
+        originCoord: origin,
+        targetCoord: [f.to_coord[0], f.to_coord[1]],
+        p0,
+        p1,
+        control,
+        t,
+        speed,
+        flow: f,
+      })
+    }
 
     scatterData.push({
       name: f.city || f.country || f.dst_ip,
@@ -640,7 +648,7 @@ const initMapOption = () => {
           // 实时卡片
           const d = flowDetailMap.get(params.data?.coordKey) || params.data?.flowData
           if (!d) {
-            return `<div style="font-weight: 600; padding: 2px 4px;">${params.name || '本地网关'}</div>`
+            return `<div style="font-weight: 600; padding: 2px 4px;">${params.name || '边缘节点'}</div>`
           }
           return `
             <div style="font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
@@ -915,6 +923,17 @@ watch(() => theme.isDark, () => {
         ref="particleCanvas"
         class="absolute inset-0 w-full h-full pointer-events-none z-10"
       ></canvas>
+
+      <!-- Empty state when no nodes connected -->
+      <div
+        v-if="(radar.nodes || []).length === 0"
+        class="absolute inset-0 z-20 flex items-center justify-center pointer-events-none p-4"
+      >
+        <div class="px-4 py-2.5 rounded-2xl apple-glass-heavy border border-slate-200/80 dark:border-slate-700/80 shadow-lg text-center backdrop-blur-md">
+          <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">暂无在线探针节点</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">请点击顶部「管理」获取一键安装命令接入节点</p>
+        </div>
+      </div>
     </div>
 
     <!-- Bottom Indicator -->

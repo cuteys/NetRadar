@@ -308,7 +308,7 @@ func (d *Database) GetNodes() ([]*model.NodeInfo, error) {
 	}
 	defer rows.Close()
 
-	var nodes []*model.NodeInfo
+	nodes := make([]*model.NodeInfo, 0)
 	now := time.Now()
 
 	for rows.Next() {

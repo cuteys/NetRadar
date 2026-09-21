@@ -415,7 +415,7 @@ func (h *Hub) GetActiveNodes() []*model.NodeInfo {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	var list []*model.NodeInfo
+	list := make([]*model.NodeInfo, 0, len(h.nodes))
 	for _, n := range h.nodes {
 		list = append(list, n)
 	}

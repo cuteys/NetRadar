@@ -249,6 +249,10 @@ export const useRadarStore = defineStore('radar', () => {
       if (data.country_dist) {
         countryDist.value = data.country_dist
       }
+    } else if (data.type === 'node_status') {
+      if (Array.isArray(data.nodes)) {
+        nodes.value = data.nodes
+      }
     }
   }
 
@@ -259,9 +263,12 @@ export const useRadarStore = defineStore('radar', () => {
         headers: { Authorization: `Bearer ${authStore.token}` },
       })
       if (res.ok) {
-        nodes.value = await res.json()
+        const data = await res.json()
+        nodes.value = Array.isArray(data) ? data : []
       }
-    } catch {}
+    } catch {
+      nodes.value = []
+    }
   }
 
   const updateNode = async (req: { id: string; name: string; ip: string; gateway_lat: number; gateway_lng: number }) => {

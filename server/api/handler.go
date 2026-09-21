@@ -84,9 +84,12 @@ func (h *APIHandler) HandleGetNodes(w http.ResponseWriter, r *http.Request) {
 	activeNodes := h.hub.GetActiveNodes()
 	if len(activeNodes) == 0 {
 		dbNodes, err := h.db.GetNodes()
-		if err == nil {
+		if err == nil && len(dbNodes) > 0 {
 			activeNodes = dbNodes
 		}
+	}
+	if activeNodes == nil {
+		activeNodes = []*model.NodeInfo{}
 	}
 	respondJSON(w, http.StatusOK, activeNodes)
 }

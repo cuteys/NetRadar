@@ -85,6 +85,7 @@ const deviceOptions = computed<DropdownOption[]>(() => {
           :options="deviceOptions"
           buttonClass="bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 border border-slate-200/80 dark:border-slate-700/80 rounded-xl px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200 max-w-[200px] sm:max-w-xs cursor-pointer transition-colors shadow-2xs"
           menuWidthClass="w-60"
+          placement="right"
         />
       </div>
     </div>

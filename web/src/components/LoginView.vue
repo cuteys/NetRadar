@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useAuthStore } from '../stores/authStore'
-import { Radar, Lock, User, ArrowRight, ShieldCheck } from 'lucide-vue-next'
+import { useThemeStore } from '../stores/themeStore'
+import { Radar, Lock, User, ArrowRight, ShieldCheck, Sun, Moon, Monitor } from 'lucide-vue-next'
 
 const auth = useAuthStore()
+const theme = useThemeStore()
 const username = ref('')
 const password = ref('')
 
@@ -14,7 +16,24 @@ const handleLogin = async () => {
 </script>
 
 <template>
-  <div class="relative min-h-screen w-full flex items-center justify-center p-4 bg-slate-100/60 dark:bg-[#090d16] overflow-hidden">
+  <div class="relative min-h-screen w-full flex items-center justify-center p-4 bg-slate-100/70 dark:bg-[#0b0f19] overflow-hidden transition-colors duration-300">
+    <!-- Background Ambience Glow -->
+    <div class="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-emerald-500/10 dark:bg-emerald-500/5 blur-3xl pointer-events-none"></div>
+    <div class="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-sky-500/10 dark:bg-sky-500/5 blur-3xl pointer-events-none"></div>
+
+    <!-- Top Right Theme Switcher -->
+    <div class="absolute top-5 right-5 z-10">
+      <button
+        @click="theme.toggle()"
+        class="w-9 h-9 rounded-xl inline-flex items-center justify-center bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/80 shadow-xs transition-all backdrop-blur-md"
+        :title="'当前模式: ' + theme.mode"
+      >
+        <Sun v-if="theme.mode === 'light'" class="w-4 h-4 text-amber-500" />
+        <Moon v-else-if="theme.mode === 'dark'" class="w-4 h-4 text-sky-400" />
+        <Monitor v-else class="w-4 h-4 text-slate-400" />
+      </button>
+    </div>
+
     <!-- Main Apple Glass Card -->
     <div class="relative w-full max-w-sm sm:max-w-md apple-glass-heavy rounded-3xl p-8 sm:p-10 shadow-2xl border border-slate-200/80 dark:border-slate-800/80 transition-all">
       <!-- Icon & Title -->

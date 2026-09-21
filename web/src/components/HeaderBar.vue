@@ -30,9 +30,15 @@ const auth = useAuthStore()
 const showSettings = ref(false)
 const showNodeManager = ref(false)
 
+const handleOpenNodeManager = async () => {
+  showNodeManager.value = true
+  await radar.fetchNodes()
+  await radar.fetchSystemSettings()
+}
+
 const activeNodeName = computed(() => {
   if (radar.selectedNodeId === 'all') return '全部节点'
-  const n = radar.nodes.find((item) => item.id === radar.selectedNodeId)
+  const n = (radar.nodes || []).find((item) => item.id === radar.selectedNodeId)
   return n ? n.name : '边缘节点'
 })
 
@@ -40,7 +46,7 @@ const nodeOptions = computed<DropdownOption[]>(() => {
   const list: DropdownOption[] = [
     { label: '全部节点', value: 'all' },
   ]
-  for (const node of radar.nodes) {
+  for (const node of (radar.nodes || [])) {
     list.push({
       label: node.name,
       value: node.id,
@@ -83,8 +89,9 @@ const nodeOptions = computed<DropdownOption[]>(() => {
           </AppleSelect>
           <div class="h-3 w-[1px] bg-slate-200 dark:bg-slate-700 my-auto mx-0.5"></div>
           <button
-            @click="showNodeManager = true"
-            class="text-[11px] px-2 py-0.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-700/80 transition-all font-medium"
+            type="button"
+            @click.stop="handleOpenNodeManager"
+            class="text-[11px] px-2 py-0.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-700/80 transition-all font-medium cursor-pointer"
             title="探针节点管理与删除"
           >
             管理
