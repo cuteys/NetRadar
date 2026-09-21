@@ -77,6 +77,12 @@ func main() {
 			payload.OS = runtime.GOOS
 			payload.Arch = runtime.GOARCH
 
+			if geo := wsClient.GetGeoInfo(); geo != nil {
+				payload.PublicIP = geo.IP
+				payload.GatewayLat = geo.Latitude
+				payload.GatewayLng = geo.Longitude
+			}
+
 			if err := wsClient.SendPayload(payload); err != nil {
 				log.Printf("[探针] 上报流量指标失败: %v", err)
 			}

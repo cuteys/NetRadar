@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRadarStore } from '../stores/radarStore'
 import {
   X,
@@ -12,7 +12,6 @@ import {
   Check,
   Terminal,
   MapPin,
-  RefreshCw,
   ArrowLeft,
   Globe2,
   Compass
@@ -36,14 +35,12 @@ const editForm = ref({
   locationMode: 'auto' as 'auto' | 'manual',
   manualType: 'ip' as 'ip' | 'coords',
   ip: '',
-  lat: 31.2304,
-  lng: 121.4737,
+  lat: 0,
+  lng: 0,
   geoInfo: '',
 })
-const isDetecting = ref(false)
 const saveSuccess = ref(false)
 const saveError = ref('')
-let autoRefreshTimer: any = null
 
 const useGhProxy = ref(false)
 
@@ -85,104 +82,39 @@ const copyCommand = (text?: string) => {
   }, 2000)
 }
 
-const fetchCyCdData = async () => {
-  isDetecting.value = true
-  try {
-    let success = false
-    try {
-      const res4 = await fetch('https://ipv4.cy.cd/api/json')
-      if (res4.ok) {
-        const d4 = await res4.json()
-        if (d4.data?.ip || d4.ip) {
-          const ip = d4.data?.ip || d4.ip
-          const lat = Number(d4.data?.location?.latitude || d4.latitude || 0)
-          const lng = Number(d4.data?.location?.longitude || d4.longitude || 0)
-          const country = d4.data?.country?.name || d4.country?.name || d4.country || ''
-          const regions = Array.isArray(d4.data?.regions) ? d4.data.regions.join(' · ') : (Array.isArray(d4.regions) ? d4.regions.join(' · ') : '')
-
-          editForm.value.ip = ip
-          if (lat) editForm.value.lat = lat
-          if (lng) editForm.value.lng = lng
-          editForm.value.geoInfo = [country, regions].filter(Boolean).join(' · ')
-          success = true
-        }
-      }
-    } catch {}
-
-    if (!success) {
-      try {
-        const res6 = await fetch('https://ipv6.cy.cd/api/json')
-        if (res6.ok) {
-          const d6 = await res6.json()
-          if (d6.data?.ip || d6.ip) {
-            const ip = d6.data?.ip || d6.ip
-            const lat = Number(d6.data?.location?.latitude || d6.latitude || 0)
-            const lng = Number(d6.data?.location?.longitude || d6.longitude || 0)
-            const country = d6.data?.country?.name || d6.country?.name || d6.country || ''
-            const regions = Array.isArray(d6.data?.regions) ? d6.data.regions.join(' · ') : (Array.isArray(d6.regions) ? d6.regions.join(' · ') : '')
-
-            editForm.value.ip = ip
-            if (lat) editForm.value.lat = lat
-            if (lng) editForm.value.lng = lng
-            editForm.value.geoInfo = [country, regions].filter(Boolean).join(' · ')
-          }
-        }
-      } catch {}
-    }
-  } finally {
-    isDetecting.value = false
-  }
-}
-
 const startEdit = (node: any) => {
   editingNode.value = node
   editForm.value = {
     name: node.name || '',
-    locationMode: 'auto',
+    locationMode: node.custom_location ? 'manual' : 'auto',
     manualType: 'ip',
     ip: node.ip || '',
-    lat: node.gateway_lat || 31.2304,
-    lng: node.gateway_lng || 121.4737,
+    lat: node.gateway_lat || 0,
+    lng: node.gateway_lng || 0,
     geoInfo: '',
   }
   saveSuccess.value = false
   saveError.value = ''
-  fetchCyCdData()
-
-  if (autoRefreshTimer) clearInterval(autoRefreshTimer)
-  autoRefreshTimer = setInterval(() => {
-    if (editingNode.value && editForm.value.locationMode === 'auto') {
-      fetchCyCdData()
-    }
-  }, 10 * 60 * 1000)
 }
 
 const cancelEdit = () => {
   editingNode.value = null
   saveSuccess.value = false
   saveError.value = ''
-  if (autoRefreshTimer) {
-    clearInterval(autoRefreshTimer)
-    autoRefreshTimer = null
-  }
 }
-
-watch(() => editForm.value.locationMode, (mode) => {
-  if (mode === 'auto') {
-    fetchCyCdData()
-  }
-})
 
 const handleSaveNode = async () => {
   if (!editingNode.value) return
   saveError.value = ''
-  
+
+  const isManual = editForm.value.locationMode === 'manual'
   const ok = await radar.updateNode({
     id: editingNode.value.id,
     name: editForm.value.name.trim() || editingNode.value.name,
     ip: editForm.value.ip.trim(),
     gateway_lat: Number(editForm.value.lat) || 0,
     gateway_lng: Number(editForm.value.lng) || 0,
+    custom_location: isManual,
   })
 
   if (ok) {
@@ -215,10 +147,6 @@ const formatDate = (d?: string) => {
     return d
   }
 }
-
-onUnmounted(() => {
-  if (autoRefreshTimer) clearInterval(autoRefreshTimer)
-})
 </script>
 
 <template>
@@ -306,34 +234,19 @@ onUnmounted(() => {
 
               <!-- AUTO FETCH MODE -->
               <div v-if="editForm.locationMode === 'auto'" class="space-y-2.5">
-                <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/70 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-800/50">
-                  <div class="text-[11px] text-slate-600 dark:text-slate-400">
-                    每 10 分钟通过接口提取公网 IP 与地理坐标（优先 IPv4）
-                  </div>
-                  <button
-                    type="button"
-                    @click="fetchCyCdData"
-                    :disabled="isDetecting"
-                    class="flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-500 text-white text-xs font-medium hover:bg-emerald-600 active:scale-95 transition-all shadow-xs disabled:opacity-50 flex-shrink-0"
-                  >
-                    <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': isDetecting }" />
-                    <span>{{ isDetecting ? '探测中...' : '立即获取' }}</span>
-                  </button>
+                <div class="p-2.5 rounded-xl bg-white/70 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-800/50 text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                  由探针节点自身向接口探测公网 IP 与地理坐标并实时上报。
                 </div>
 
                 <!-- Auto Detected IP & Geolocation Result Card -->
                 <div class="p-3 rounded-xl bg-white/60 dark:bg-slate-900/40 border border-slate-200/40 dark:border-slate-800/40 space-y-1.5 text-xs font-mono">
                   <div class="flex items-center justify-between">
                     <span class="text-slate-400 text-[11px]">公网 IP 地址:</span>
-                    <span class="font-semibold text-slate-800 dark:text-slate-200">{{ editForm.ip || '未获取到' }}</span>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-slate-400 text-[11px]">归属地信息:</span>
-                    <span class="text-slate-700 dark:text-slate-300">{{ editForm.geoInfo || '自动解析中' }}</span>
+                    <span class="font-semibold text-slate-800 dark:text-slate-200">{{ editForm.ip || '探针自动上报中' }}</span>
                   </div>
                   <div class="flex items-center justify-between">
                     <span class="text-slate-400 text-[11px]">地理坐标:</span>
-                    <span class="text-emerald-600 dark:text-emerald-400">[{{ editForm.lng.toFixed(4) }}, {{ editForm.lat.toFixed(4) }}]</span>
+                    <span class="text-emerald-600 dark:text-emerald-400">[{{ editForm.lng ? editForm.lng.toFixed(4) : '0' }}, {{ editForm.lat ? editForm.lat.toFixed(4) : '0' }}]</span>
                   </div>
                 </div>
               </div>

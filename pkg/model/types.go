@@ -42,32 +42,38 @@ type NodeMetricsPayload struct {
 	RateInBps     float64 `json:"rate_in_bps"`
 	RateOutBps    float64 `json:"rate_out_bps"`
 	ActiveConns   int     `json:"active_conns"`
+
+	PublicIP   string  `json:"public_ip,omitempty"`
+	GatewayLat float64 `json:"gateway_lat,omitempty"`
+	GatewayLng float64 `json:"gateway_lng,omitempty"`
 }
 
 type NodeInfo struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Hostname    string    `json:"hostname"`
-	OS          string    `json:"os"`
-	Arch        string    `json:"arch"`
-	IP          string    `json:"ip"`
-	Version     string    `json:"version"`
-	LastSeen    time.Time `json:"last_seen"`
-	IsOnline    bool      `json:"is_online"`
-	RateInBps   float64   `json:"rate_in_bps"`
-	RateOutBps  float64   `json:"rate_out_bps"`
-	ActiveConns int       `json:"active_conns"`
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Hostname       string    `json:"hostname"`
+	OS             string    `json:"os"`
+	Arch           string    `json:"arch"`
+	IP             string    `json:"ip"`
+	Version        string    `json:"version"`
+	LastSeen       time.Time `json:"last_seen"`
+	IsOnline       bool      `json:"is_online"`
+	RateInBps      float64   `json:"rate_in_bps"`
+	RateOutBps     float64   `json:"rate_out_bps"`
+	ActiveConns    int       `json:"active_conns"`
 
-	GatewayLat float64 `json:"gateway_lat"`
-	GatewayLng float64 `json:"gateway_lng"`
+	GatewayLat     float64 `json:"gateway_lat"`
+	GatewayLng     float64 `json:"gateway_lng"`
+	CustomLocation bool    `json:"custom_location,omitempty"`
 }
 
 type UpdateNodeRequest struct {
-	ID         string  `json:"id"`
-	Name       string  `json:"name"`
-	IP         string  `json:"ip"`
-	GatewayLat float64 `json:"gateway_lat"`
-	GatewayLng float64 `json:"gateway_lng"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	IP             string  `json:"ip"`
+	GatewayLat     float64 `json:"gateway_lat"`
+	GatewayLng     float64 `json:"gateway_lng"`
+	CustomLocation bool    `json:"custom_location"`
 }
 
 type DeviceStats struct {

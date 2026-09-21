@@ -44,6 +44,7 @@ export interface NodeInfo {
   rate_out_bps: number
   gateway_lat: number
   gateway_lng: number
+  custom_location?: boolean
   last_seen?: string
 }
 
@@ -271,7 +272,7 @@ export const useRadarStore = defineStore('radar', () => {
     }
   }
 
-  const updateNode = async (req: { id: string; name: string; ip: string; gateway_lat: number; gateway_lng: number }) => {
+  const updateNode = async (req: { id: string; name: string; ip: string; gateway_lat: number; gateway_lng: number; custom_location?: boolean }) => {
     if (!authStore.token) return false
     try {
       const res = await fetch('/api/nodes/update', {
@@ -289,6 +290,9 @@ export const useRadarStore = defineStore('radar', () => {
           target.ip = req.ip
           target.gateway_lat = req.gateway_lat
           target.gateway_lng = req.gateway_lng
+          if (typeof req.custom_location === 'boolean') {
+            target.custom_location = req.custom_location
+          }
         }
         return true
       }

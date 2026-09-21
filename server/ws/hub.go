@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -65,6 +66,13 @@ func NewHub(cfg *config.ServerConfig, authSvc *auth.AuthService, geoSvc *geo.Geo
 		nodes:         make(map[string]*model.NodeInfo),
 		nodeLANMap:    make(map[string]map[string]*model.DeviceStats),
 		stopHeartbeat: make(chan struct{}),
+	}
+
+	if dbNodes, err := db.GetNodes(); err == nil {
+		for _, n := range dbNodes {
+			n.IsOnline = false
+			h.nodes[n.ID] = n
+		}
 	}
 
 	go h.runLivenessChecker()
@@ -125,6 +133,15 @@ func (h *Hub) HandleAgentWS(w http.ResponseWriter, r *http.Request) {
 		nodeName = nodeID
 	}
 
+	agentPublicIP := r.Header.Get("X-NetRadar-Public-IP")
+	var agentLat, agentLng float64
+	if latStr := r.Header.Get("X-NetRadar-Lat"); latStr != "" {
+		agentLat, _ = strconv.ParseFloat(latStr, 64)
+	}
+	if lngStr := r.Header.Get("X-NetRadar-Lng"); lngStr != "" {
+		agentLng, _ = strconv.ParseFloat(lngStr, 64)
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("[Hub] 探针 WebSocket 升级失败: %v", err)
@@ -132,29 +149,50 @@ func (h *Hub) HandleAgentWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	clientIP, _, _ := net.SplitHostPort(r.RemoteAddr)
-	log.Printf("[Hub] 探针已连接: ID=%s 名称=%s IP=%s", nodeID, nodeName, clientIP)
-
-	loc := h.ipRefresher.GetLocation()
-	gatewayLat := loc.GatewayLat
-	gatewayLng := loc.GatewayLng
-	if gatewayLat == 0 && gatewayLng == 0 {
-		gatewayLat = h.cfg.GatewayLat
-		gatewayLng = h.cfg.GatewayLng
+	remoteIP, _, _ := net.SplitHostPort(r.RemoteAddr)
+	effectiveIP := agentPublicIP
+	if effectiveIP == "" {
+		effectiveIP = remoteIP
 	}
 
-	node := &model.NodeInfo{
-		ID:         nodeID,
-		Name:       nodeName,
-		IP:         clientIP,
-		LastSeen:   time.Now(),
-		IsOnline:   true,
-		GatewayLat: gatewayLat,
-		GatewayLng: gatewayLng,
-	}
+	log.Printf("[Hub] 探针已连接: ID=%s 名称=%s 公网IP=%s (连接IP=%s)", nodeID, nodeName, effectiveIP, remoteIP)
 
 	h.mu.Lock()
-	h.nodes[nodeID] = node
+	node, exists := h.nodes[nodeID]
+	if !exists {
+		lat := agentLat
+		lng := agentLng
+		if lat == 0 && lng == 0 {
+			lat = h.cfg.GatewayLat
+			lng = h.cfg.GatewayLng
+		}
+		node = &model.NodeInfo{
+			ID:         nodeID,
+			Name:       nodeName,
+			IP:         effectiveIP,
+			LastSeen:   time.Now(),
+			IsOnline:   true,
+			GatewayLat: lat,
+			GatewayLng: lng,
+		}
+		h.nodes[nodeID] = node
+	} else {
+		node.IsOnline = true
+		node.LastSeen = time.Now()
+		if nodeName != "" {
+			node.Name = nodeName
+		}
+		if !node.CustomLocation {
+			if effectiveIP != "" {
+				node.IP = effectiveIP
+			}
+			if agentLat != 0 && agentLng != 0 {
+				node.GatewayLat = agentLat
+				node.GatewayLng = agentLng
+			}
+		}
+	}
+
 	if _, ok := h.nodeLANMap[nodeID]; !ok {
 		h.nodeLANMap[nodeID] = make(map[string]*model.DeviceStats)
 	}
@@ -203,6 +241,23 @@ func (h *Hub) processAgentPayload(p *model.NodeMetricsPayload, node *model.NodeI
 	node.Hostname = p.Hostname
 	node.OS = p.OS
 	node.Arch = p.Arch
+
+	if !node.CustomLocation {
+		statusChanged := false
+		if p.PublicIP != "" && node.IP != p.PublicIP {
+			node.IP = p.PublicIP
+			statusChanged = true
+		}
+		if p.GatewayLat != 0 && p.GatewayLng != 0 && (node.GatewayLat != p.GatewayLat || node.GatewayLng != p.GatewayLng) {
+			node.GatewayLat = p.GatewayLat
+			node.GatewayLng = p.GatewayLng
+			statusChanged = true
+		}
+		if statusChanged {
+			_ = h.db.UpsertNode(node)
+			h.BroadcastNodeStatus()
+		}
+	}
 
 	_ = h.db.RecordTraffic(p.NodeID, p.Timestamp, p.TotalBytesIn, p.TotalBytesOut, p.RateInBps, p.RateOutBps, p.ActiveConns)
 
@@ -446,6 +501,7 @@ func (h *Hub) UpdateNodeInfo(req *model.UpdateNodeRequest) error {
 		if req.GatewayLng != 0 {
 			n.GatewayLng = req.GatewayLng
 		}
+		n.CustomLocation = req.CustomLocation
 	}
 	h.mu.Unlock()
 	h.BroadcastNodeStatus()

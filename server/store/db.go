@@ -117,6 +117,7 @@ func (d *Database) migrate() error {
 		_, _ = d.db.Exec(`ALTER TABLE admin_credentials ADD COLUMN agent_server_addr TEXT DEFAULT ''`)
 		_, _ = d.db.Exec(`ALTER TABLE admin_credentials ADD COLUMN use_tls INTEGER DEFAULT 0`)
 		_, _ = d.db.Exec(`ALTER TABLE admin_credentials ADD COLUMN jwt_secret TEXT DEFAULT ''`)
+		_, _ = d.db.Exec(`ALTER TABLE nodes ADD COLUMN custom_location INTEGER DEFAULT 0`)
 	}
 	return err
 }
@@ -222,19 +223,27 @@ func (d *Database) UpsertNode(node *model.NodeInfo) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
+	customLoc := 0
+	if node.CustomLocation {
+		customLoc = 1
+	}
+
 	query := `
-	INSERT INTO nodes (id, name, hostname, os, arch, ip, version, first_seen, last_seen, gateway_lat, gateway_lng)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO nodes (id, name, hostname, os, arch, ip, version, first_seen, last_seen, gateway_lat, gateway_lng, custom_location)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(id) DO UPDATE SET
 		name=CASE WHEN excluded.name != '' THEN excluded.name ELSE nodes.name END,
 		hostname=excluded.hostname,
 		os=excluded.os,
 		arch=excluded.arch,
+		ip=CASE WHEN nodes.custom_location = 1 THEN nodes.ip WHEN excluded.ip != '' THEN excluded.ip ELSE nodes.ip END,
+		gateway_lat=CASE WHEN nodes.custom_location = 1 THEN nodes.gateway_lat WHEN excluded.gateway_lat != 0 THEN excluded.gateway_lat ELSE nodes.gateway_lat END,
+		gateway_lng=CASE WHEN nodes.custom_location = 1 THEN nodes.gateway_lng WHEN excluded.gateway_lng != 0 THEN excluded.gateway_lng ELSE nodes.gateway_lng END,
 		last_seen=excluded.last_seen;
 	`
 	_, err := d.db.Exec(query,
 		node.ID, node.Name, node.Hostname, node.OS, node.Arch, node.IP, node.Version,
-		time.Now(), node.LastSeen, node.GatewayLat, node.GatewayLng,
+		time.Now(), node.LastSeen, node.GatewayLat, node.GatewayLng, customLoc,
 	)
 	return err
 }
@@ -243,12 +252,17 @@ func (d *Database) UpdateNodeInfo(req *model.UpdateNodeRequest) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
+	customLoc := 0
+	if req.CustomLocation {
+		customLoc = 1
+	}
+
 	query := `
 	UPDATE nodes
-	SET name = ?, ip = ?, gateway_lat = ?, gateway_lng = ?
+	SET name = ?, ip = ?, gateway_lat = ?, gateway_lng = ?, custom_location = ?
 	WHERE id = ?
 	`
-	_, err := d.db.Exec(query, req.Name, req.IP, req.GatewayLat, req.GatewayLng, req.ID)
+	_, err := d.db.Exec(query, req.Name, req.IP, req.GatewayLat, req.GatewayLng, customLoc, req.ID)
 	return err
 }
 
@@ -302,7 +316,7 @@ func (d *Database) GetNodes() ([]*model.NodeInfo, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	rows, err := d.db.Query(`SELECT id, name, hostname, os, arch, ip, version, last_seen, gateway_lat, gateway_lng FROM nodes`)
+	rows, err := d.db.Query(`SELECT id, name, hostname, os, arch, ip, version, last_seen, gateway_lat, gateway_lng, COALESCE(custom_location, 0) FROM nodes`)
 	if err != nil {
 		return nil, err
 	}
@@ -314,9 +328,11 @@ func (d *Database) GetNodes() ([]*model.NodeInfo, error) {
 	for rows.Next() {
 		var n model.NodeInfo
 		var lastSeen time.Time
-		if err := rows.Scan(&n.ID, &n.Name, &n.Hostname, &n.OS, &n.Arch, &n.IP, &n.Version, &lastSeen, &n.GatewayLat, &n.GatewayLng); err == nil {
+		var customLoc int
+		if err := rows.Scan(&n.ID, &n.Name, &n.Hostname, &n.OS, &n.Arch, &n.IP, &n.Version, &lastSeen, &n.GatewayLat, &n.GatewayLng, &customLoc); err == nil {
 			n.LastSeen = lastSeen
 			n.IsOnline = now.Sub(lastSeen) < 15*time.Second
+			n.CustomLocation = customLoc == 1
 			nodes = append(nodes, &n)
 		}
 	}

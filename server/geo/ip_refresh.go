@@ -72,31 +72,39 @@ func (s *IPRefreshService) RefreshNow() error {
 	var newIPv4, newIPv6, newCity string
 	var newLat, newLng float64
 
-	resp4, err := s.client.Get("https://ipv4.cy.cd/api/json")
-	if err == nil && resp4.StatusCode == http.StatusOK {
-		var data4 CyCDResponse
-		if err := json.NewDecoder(resp4.Body).Decode(&data4); err == nil && data4.Data.IP != "" {
-			newIPv4 = data4.Data.IP
-			if data4.Data.Location.Latitude != 0 {
-				newLat = data4.Data.Location.Latitude
-				newLng = data4.Data.Location.Longitude
+	req4, err4 := http.NewRequest(http.MethodGet, "https://ipv4.cy.cd/api/json", nil)
+	if err4 == nil {
+		req4.Header.Set("User-Agent", "NetRadar")
+		resp4, err := s.client.Do(req4)
+		if err == nil && resp4.StatusCode == http.StatusOK {
+			var data4 CyCDResponse
+			if err := json.NewDecoder(resp4.Body).Decode(&data4); err == nil && data4.Data.IP != "" {
+				newIPv4 = data4.Data.IP
+				if data4.Data.Location.Latitude != 0 {
+					newLat = data4.Data.Location.Latitude
+					newLng = data4.Data.Location.Longitude
+				}
+				var regionStr string
+				if len(data4.Data.Regions) > 0 {
+					regionStr = strings.Join(data4.Data.Regions, "·")
+				}
+				newCity = fmt.Sprintf("%s (%s)", data4.Data.Country.Name, regionStr)
 			}
-			var regionStr string
-			if len(data4.Data.Regions) > 0 {
-				regionStr = strings.Join(data4.Data.Regions, "·")
-			}
-			newCity = fmt.Sprintf("%s (%s)", data4.Data.Country.Name, regionStr)
+			_ = resp4.Body.Close()
 		}
-		_ = resp4.Body.Close()
 	}
 
-	resp6, err := s.client.Get("https://ipv6.cy.cd/api/json")
-	if err == nil && resp6.StatusCode == http.StatusOK {
-		var data6 CyCDResponse
-		if err := json.NewDecoder(resp6.Body).Decode(&data6); err == nil {
-			newIPv6 = data6.Data.IP
+	req6, err6 := http.NewRequest(http.MethodGet, "https://ipv6.cy.cd/api/json", nil)
+	if err6 == nil {
+		req6.Header.Set("User-Agent", "NetRadar")
+		resp6, err := s.client.Do(req6)
+		if err == nil && resp6.StatusCode == http.StatusOK {
+			var data6 CyCDResponse
+			if err := json.NewDecoder(resp6.Body).Decode(&data6); err == nil {
+				newIPv6 = data6.Data.IP
+			}
+			_ = resp6.Body.Close()
 		}
-		_ = resp6.Body.Close()
 	}
 
 	s.mu.Lock()
