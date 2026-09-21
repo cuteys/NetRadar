@@ -1,0 +1,8 @@
+bin/
+release-bin/
+data/
+*.db
+*.db-wal
+*.db-shm
+.git
+web/node_modules/

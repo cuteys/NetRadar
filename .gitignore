@@ -1,0 +1,33 @@
+# Binaries and build outputs
+bin/
+dist/
+dist_release/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.tmp
+
+# SQLite Database files & temporary journals
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Offline GeoIP databases (auto-downloaded at runtime, never commit)
+*.mmdb
+
+# Web Frontend dependencies & build artifacts
+web/node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo
+.npm/
+
+# IDE & OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~

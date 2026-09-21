@@ -1,0 +1,16 @@
+services:
+  netradar:
+    image: cuteys/netradar:latest
+    container_name: netradar
+    restart: unless-stopped
+    ports:
+      - 8899:8899
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./data:/data
+    environment:
+      - TZ=Asia/Shanghai
+      # 可选：指定管理员初始密码；若留空，首次启动将自动生成随机密码并在终端日志中打印
+      # - NETRADAR_ADMIN_PASSWORD=admin888
+      # 可选：指定探针通信密钥；若留空，首次启动将自动生成随机 Token
+      # - NETRADAR_AGENT_TOKEN=your_secure_token

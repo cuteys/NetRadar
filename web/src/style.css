@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .apple-glass {
+    @apply bg-white/95 dark:bg-[#131926]/95 border border-slate-200/60 dark:border-slate-800/60 shadow-apple-card;
+  }
+
+  .apple-glass-heavy {
+    @apply bg-white/95 dark:bg-[#0f1422]/95 border border-slate-200/80 dark:border-slate-700/60 shadow-xl;
+  }
+
+  .apple-card {
+    @apply rounded-3xl transition-all duration-300;
+  }
+}
+
+/* Custom scrollbars for clean Apple look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.4);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.6);
+}
