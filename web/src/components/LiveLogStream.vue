@@ -17,15 +17,16 @@ const radar = useRadarStore()
 
 const listContainer = ref<HTMLDivElement | null>(null)
 
-watch(() => radar.searchFilter, () => {
+const sortBy = ref<'traffic' | 'speed' | 'time'>('traffic')
+const statusFilter = ref<'all' | 'active' | 'closed'>('all')
+const selectedPort = ref<string>('all')
+
+// 当筛选条件变化时，自动将列表滚动重置至顶部
+watch([() => radar.searchFilter, selectedPort, statusFilter, sortBy, () => radar.selectedTimeRange], () => {
   if (listContainer.value) {
     listContainer.value.scrollTop = 0
   }
 })
-
-const sortBy = ref<'traffic' | 'speed' | 'time'>('traffic')
-const statusFilter = ref<'all' | 'active' | 'closed'>('all')
-const selectedPort = ref<string>('all')
 
 const portChips = [
   { label: '全部', value: 'all' },
@@ -34,6 +35,31 @@ const portChips = [
   { label: '53/DNS', value: '53' },
   { label: '22/SSH', value: '22' },
 ]
+
+// 基础未过滤端口列表，用于计算每个常用端口的实时连接数
+const basePortList = computed(() => {
+  if (radar.selectedTimeRange !== 'realtime') {
+    return radar.historicalDestinations || []
+  }
+  let conns = radar.activeConnections
+  if (radar.selectedNodeId && radar.selectedNodeId !== 'all') {
+    conns = conns.filter((c) => c.node_id === radar.selectedNodeId)
+  }
+  if (radar.selectedDeviceIp) {
+    conns = conns.filter((c) => c.src_ip === radar.selectedDeviceIp)
+  }
+  return conns
+})
+
+const getPortCount = (portVal: string) => {
+  const list = basePortList.value
+  if (portVal === 'all') return list.length
+  const p = Number(portVal)
+  if (radar.selectedTimeRange !== 'realtime') {
+    return list.filter((h: any) => h.dst_port === p).length
+  }
+  return list.filter((c: any) => c.dst_port === p || c.src_port === p).length
+}
 
 const getProtocolBadgeClass = (proto: string) => {
   switch (proto?.toUpperCase()) {
@@ -112,6 +138,7 @@ const displayItems = computed(() => {
     return sorted.map((h, idx) => ({
       isHistorical: true,
       id: `hist_${idx}_${h.dst_ip}_${h.dst_port}_${h.node_id || ''}`,
+      uniqueKey: `hist_${h.node_id || ''}_${h.dst_ip}_${h.dst_port}_${h.protocol || ''}_${idx}`,
       protocol: (h.protocol || 'TCP').toUpperCase(),
       src_ip: '历史聚合',
       src_port: undefined as number | undefined,
@@ -141,7 +168,7 @@ const displayItems = computed(() => {
   }
   if (selectedPort.value !== 'all') {
     const p = Number(selectedPort.value)
-    conns = conns.filter((c) => c.dst_port === p)
+    conns = conns.filter((c) => c.dst_port === p || c.src_port === p)
   }
   if (statusFilter.value === 'active') {
     conns = conns.filter((c) => c.status === 'active')
@@ -183,9 +210,10 @@ const displayItems = computed(() => {
     copy.sort((a, b) => (b.total_in + b.total_out) - (a.total_in + a.total_out))
   }
 
-  return copy.map((c) => ({
+  return copy.map((c, idx) => ({
     isHistorical: false,
     id: c.id,
+    uniqueKey: `rt_${c.node_id || ''}_${c.protocol}_${c.src_ip}:${c.src_port || 0}_${c.dst_ip}:${c.dst_port}_${idx}`,
     protocol: c.protocol,
     src_ip: c.src_ip,
     src_port: c.src_port,
@@ -288,12 +316,13 @@ const displayItems = computed(() => {
           v-for="chip in portChips"
           :key="chip.value"
           @click="selectedPort = chip.value"
-          class="px-2 py-0.5 rounded-lg text-[11px] transition-all whitespace-nowrap"
+          class="px-2 py-0.5 rounded-lg text-[11px] transition-all whitespace-nowrap cursor-pointer"
           :class="selectedPort === chip.value
             ? 'bg-emerald-500 text-white font-medium shadow-2xs'
             : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
         >
-          {{ chip.label }}
+          <span>{{ chip.label }}</span>
+          <span class="text-[10px] opacity-80 ml-1">({{ getPortCount(chip.value) }})</span>
         </button>
       </div>
 
@@ -321,7 +350,7 @@ const displayItems = computed(() => {
     <div ref="listContainer" class="flex-1 overflow-y-auto space-y-2 pr-1 text-xs">
       <div
         v-for="item in displayItems"
-        :key="item.id"
+        :key="item.uniqueKey"
         class="p-2.5 sm:p-3 rounded-2xl transition-all font-mono shadow-2xs space-y-1.5 border"
         :class="item.status === 'active' && (item.speed_in > 0 || item.speed_out > 0)
           ? 'bg-emerald-50/30 dark:bg-emerald-950/20 border-emerald-400/60 dark:border-emerald-500/50 shadow-xs'
@@ -418,7 +447,7 @@ const displayItems = computed(() => {
         <div class="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100/60 dark:border-slate-700/40 text-slate-500 dark:text-slate-400 gap-2">
           <!-- Geo & ISP Info -->
           <div class="truncate text-slate-400 text-[10px] sm:text-[11px] min-w-0 flex-1">
-            <span>{{ formatCountry(item.country) }}</span><span v-if="item.city && item.city !== item.country && item.city !== formatCountry(item.country)">·{{ item.city }}</span>
+            <span>{{ formatCountry(item.country) }}</span><span v-if="item.city && item.city !== item.country && item.city !== formatCountry(item.country)">·{{ item.city.replace(/\s+/g, '·') }}</span>
             <span v-if="item.isp" class="hidden sm:inline"> ({{ item.isp }})</span>
           </div>
 

@@ -737,10 +737,11 @@ const initMapOption = () => {
             const lastSeenStr = h.last_seen ? new Date(h.last_seen * 1000).toLocaleString('zh-CN', { hour12: false }) : '近期'
             const displayCountry = formatCountry(h.country) || '外联节点'
             const displayDstIP = compressIP(h.dst_ip)
+            const displayCity = (h.city || '数据中心').replace(/\s+/g, '·')
             return `
               <div style="font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
                 <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${params.color || '#38bdf8'}"></span>
-                ${displayCountry} · ${h.city || '数据中心'}
+                ${displayCountry} · ${displayCity}
               </div>
               <div style="font-size: 11px; opacity: 0.88; line-height: 1.6;">
                 <div>目标 IP: <span style="font-family: monospace; font-weight: 600;">${displayDstIP}${h.dst_port ? ':' + h.dst_port : ''}</span></div>
@@ -759,12 +760,13 @@ const initMapOption = () => {
             return `<div style="font-weight: 600; padding: 2px 4px;">${params.name || '边缘节点'}</div>`
           }
           const displayCountry = formatCountry(d.country) || '外联节点'
+          const displayCity = (d.city || '数据中心').replace(/\s+/g, '·')
           const displayDstIP = compressIP(d.dst_ip)
           const displaySrcDevice = formatDeviceName(radar.getDeviceName(d.src_ip), d.src_ip)
           return `
             <div style="font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
               <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${params.color || '#10b981'}"></span>
-              ${displayCountry} · ${d.city || '数据中心'}
+              ${displayCountry} · ${displayCity}
             </div>
             <div style="font-size: 11px; opacity: 0.88; line-height: 1.6;">
               <div>目标 IP: <span style="font-family: monospace; font-weight: 600;">${displayDstIP}${d.dst_port ? ':' + d.dst_port : ''}</span></div>

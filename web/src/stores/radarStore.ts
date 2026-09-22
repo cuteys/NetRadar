@@ -503,7 +503,7 @@ export const useRadarStore = defineStore('radar', () => {
         existing.status = 'active'
       } else {
         const item: ConnectionItem = {
-          id: f.id || connKey,
+          id: connKey,
           key: connKey,
           node_id: f.node_id,
           protocol: f.protocol || 'TCP',

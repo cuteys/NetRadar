@@ -169,7 +169,7 @@ const formatUptime = (seconds?: number) => {
         class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/75 transition-all"
       >
         <div
-          class="w-full max-w-2xl apple-glass-heavy rounded-3xl p-6 sm:p-7 shadow-2xl border border-slate-200/80 dark:border-slate-800/80 text-slate-800 dark:text-slate-100 relative max-h-[90vh] flex flex-col animate-scale-in"
+          class="w-full max-w-2xl lg:max-w-3xl apple-glass-heavy rounded-3xl p-4 sm:p-7 shadow-2xl border border-slate-200/80 dark:border-slate-800/80 text-slate-800 dark:text-slate-100 relative max-h-[90vh] flex flex-col animate-scale-in"
         >
           <!-- Close Button -->
           <button
@@ -423,63 +423,122 @@ const formatUptime = (seconds?: number) => {
             </div>
 
             <!-- Node List -->
-            <div class="space-y-2.5">
+            <div class="space-y-3">
               <div
                 v-for="node in (radar.nodes || [])"
                 :key="node.id"
-                class="p-3.5 rounded-2xl bg-white/60 dark:bg-slate-800/40 border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between gap-3 hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all"
+                class="p-3.5 sm:p-4 rounded-2xl bg-white/70 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 hover:bg-white/95 dark:hover:bg-slate-800/90 hover:border-slate-300 dark:hover:border-slate-600 transition-all space-y-2.5 shadow-xs"
               >
-                <!-- Node details -->
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
-                    <span class="font-semibold text-xs text-slate-800 dark:text-slate-100 truncate">
+                <!-- Card Top Row: Node Name + Status Badge on left; Edit & Delete Actions firmly anchored on right -->
+                <div class="flex items-center justify-between gap-3">
+                  <div class="flex items-center gap-2 min-w-0 flex-1">
+                    <span class="font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate">
                       {{ node.name }}
                     </span>
-                    <!-- Status badge -->
                     <span
-                      class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border"
+                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border flex-shrink-0"
                       :class="node.is_online
-                        ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40'
+                        ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50'
                         : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'"
                     >
-                      <CheckCircle2 v-if="node.is_online" class="w-2.5 h-2.5" />
-                      <XCircle v-else class="w-2.5 h-2.5" />
-                      {{ node.is_online ? '在线' : '离线' }}
+                      <span class="w-1.5 h-1.5 rounded-full" :class="node.is_online ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'"></span>
+                      <span>{{ node.is_online ? '在线' : '离线' }}</span>
                     </span>
                   </div>
 
-                  <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                    <span>UUID: <strong class="text-slate-700 dark:text-slate-300 font-normal">{{ node.id }}</strong></span>
-                    <span>探针版本: <strong class="text-emerald-600 dark:text-emerald-400 font-semibold">{{ node.version || '未知' }}</strong></span>
-                    <span v-if="node.ip">IP: {{ compressIP(node.ip) }}</span>
-                    <span v-if="node.gateway_lat && node.gateway_lng">坐标: [{{ node.gateway_lng.toFixed(2) }}, {{ node.gateway_lat.toFixed(2) }}]</span>
-                    <span v-if="node.os">系统: {{ node.os }}/{{ node.arch }}</span>
-                    <span v-if="node.cpu_usage !== undefined && node.cpu_usage >= 0">CPU: <strong class="text-slate-700 dark:text-slate-300 font-medium">{{ node.cpu_usage.toFixed(1) }}%</strong></span>
-                    <span v-if="node.mem_usage !== undefined && node.mem_usage >= 0">内存: <strong class="text-slate-700 dark:text-slate-300 font-medium">{{ node.mem_usage.toFixed(1) }}%</strong></span>
-                    <span v-if="node.uptime">运行: <strong class="text-slate-700 dark:text-slate-300 font-medium">{{ formatUptime(node.uptime) }}</strong></span>
-                    <span>最后在线: {{ formatDate(node.last_seen) }}</span>
+                  <!-- Top-Right Actions: always visible, neatly aligned -->
+                  <div class="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      @click="startEdit(node)"
+                      class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700/80 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-400 border border-slate-200/60 dark:border-slate-600/60 transition-all cursor-pointer"
+                      title="修改节点名称与定位"
+                    >
+                      <Edit3 class="w-3.5 h-3.5" />
+                      <span>编辑</span>
+                    </button>
+                    <button
+                      @click="handleDelete(node.id, node.name)"
+                      :disabled="deletingId === node.id"
+                      class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/40 border border-red-200/60 dark:border-red-800/40 transition-all disabled:opacity-50 cursor-pointer"
+                      title="彻底删除此节点"
+                    >
+                      <Trash2 class="w-3.5 h-3.5" />
+                      <span>删除</span>
+                    </button>
                   </div>
                 </div>
 
-                <!-- Actions: Edit & Delete -->
-                <div class="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    @click="startEdit(node)"
-                    class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shadow-2xs"
-                    title="修改节点名称与定位"
+                <!-- Runtime Hardware Metrics Pills (CPU, Memory, Uptime, Version) -->
+                <div class="flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
+                  <!-- CPU Badge -->
+                  <span
+                    v-if="node.cpu_usage !== undefined && node.cpu_usage >= 0"
+                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border"
+                    :class="node.cpu_usage > 70
+                      ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400 border-rose-200 dark:border-rose-800/40'
+                      : node.cpu_usage > 30
+                        ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400 border-amber-200 dark:border-amber-800/40'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200/60 dark:border-slate-700/60'"
                   >
-                    <Edit3 class="w-3.5 h-3.5 text-emerald-500" />
-                    <span>编辑</span>
-                  </button>
-                  <button
-                    @click="handleDelete(node.id, node.name)"
-                    :disabled="deletingId === node.id"
-                    class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/40 border border-red-200/60 dark:border-red-800/40 transition-all disabled:opacity-50"
-                    title="彻底删除此节点"
+                    <span class="text-slate-400">CPU</span>
+                    <strong>{{ node.cpu_usage.toFixed(1) }}%</strong>
+                  </span>
+
+                  <!-- Memory Badge -->
+                  <span
+                    v-if="node.mem_usage !== undefined && node.mem_usage >= 0"
+                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200/60 dark:border-slate-700/60"
                   >
-                    <Trash2 class="w-3.5 h-3.5" />
-                    <span class="hidden sm:inline">删除</span>
-                  </button>
+                    <span class="text-slate-400">内存</span>
+                    <strong>{{ node.mem_usage.toFixed(1) }}%</strong>
+                  </span>
+
+                  <!-- Uptime Badge -->
+                  <span
+                    v-if="node.uptime"
+                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200/60 dark:border-slate-700/60"
+                  >
+                    <span class="text-slate-400">运行</span>
+                    <strong>{{ formatUptime(node.uptime) }}</strong>
+                  </span>
+
+                  <!-- Version Badge -->
+                  <span
+                    v-if="node.version"
+                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40"
+                  >
+                    <span class="text-emerald-500 dark:text-emerald-500">版本</span>
+                    <strong>{{ node.version }}</strong>
+                  </span>
+                </div>
+
+                <!-- Network & Host Info Grid: IP, OS, Gateway Coords -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 p-2 rounded-xl bg-slate-50/80 dark:bg-slate-900/40 border border-slate-200/40 dark:border-slate-800/40 text-[11px] font-mono">
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <span class="text-slate-400 flex-shrink-0">IP:</span>
+                    <span class="text-slate-700 dark:text-slate-200 truncate select-all">{{ node.ip ? compressIP(node.ip) : '未上报' }}</span>
+                  </div>
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <span class="text-slate-400 flex-shrink-0">系统:</span>
+                    <span class="text-slate-700 dark:text-slate-200 truncate">{{ node.os ? `${node.os}/${node.arch}` : '未知' }}</span>
+                  </div>
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <span class="text-slate-400 flex-shrink-0">坐标:</span>
+                    <span class="text-slate-700 dark:text-slate-200 truncate">
+                      {{ (node.gateway_lat || node.gateway_lng) ? `[${node.gateway_lng.toFixed(2)}, ${node.gateway_lat.toFixed(2)}]` : '未定位' }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Card Bottom: UUID (copyable) & Last Seen -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[10px] text-slate-400 font-mono pt-0.5">
+                  <div class="flex items-center gap-1 min-w-0">
+                    <span class="flex-shrink-0">UUID:</span>
+                    <span class="text-slate-500 dark:text-slate-400 truncate select-all">{{ node.id }}</span>
+                  </div>
+                  <div class="whitespace-nowrap flex-shrink-0">
+                    <span>最后心跳: {{ formatDate(node.last_seen) }}</span>
+                  </div>
                 </div>
               </div>
 
