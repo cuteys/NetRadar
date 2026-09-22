@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from './stores/authStore'
 import { useRadarStore } from './stores/radarStore'
 import { useThemeStore } from './stores/themeStore'
+import { checkVersionAndClearCache } from './utils/cache'
 import HeaderBar from './components/HeaderBar.vue'
 import CumulativeStatsBar from './components/CumulativeStatsBar.vue'
 import LoginView from './components/LoginView.vue'
@@ -17,6 +18,10 @@ const radar = useRadarStore()
 const theme = useThemeStore()
 
 onMounted(async () => {
+  // 检测到与服务端版本号不一致时，自动深度清理缓存并重载
+  const reloaded = await checkVersionAndClearCache()
+  if (reloaded) return
+
   await auth.checkAuth()
   if (auth.isAuthenticated) {
     radar.fetchNodes()

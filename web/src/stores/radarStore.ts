@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, shallowRef, computed, watch } from 'vue'
 import { useAuthStore } from './authStore'
+import { checkVersionAndClearCache } from '../utils/cache'
 
 export interface ParticleFlow {
   id: string
@@ -681,7 +682,11 @@ export const useRadarStore = defineStore('radar', () => {
         headers: { Authorization: `Bearer ${authStore.token}` },
       })
       if (res.ok) {
-        systemSettings.value = await res.json()
+        const data = await res.json()
+        systemSettings.value = data
+        if (data && data.version) {
+          await checkVersionAndClearCache(data.version)
+        }
       }
     } catch {}
   }

@@ -12,6 +12,7 @@ import (
 	"netradar/server/api"
 	"netradar/server/auth"
 	"netradar/server/config"
+	"netradar/pkg/version"
 	"netradar/server/geo"
 	"netradar/server/store"
 	"netradar/server/ws"
@@ -20,7 +21,7 @@ import (
 //go:embed dist/*
 var embeddedDist embed.FS
 
-var Version = "v0.1.6"
+var Version = version.Version
 
 func main() {
 	cfg := config.LoadConfig()

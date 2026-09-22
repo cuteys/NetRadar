@@ -1,11 +1,13 @@
 package api
 
 import (
+	"encoding/json"
 	"io/fs"
 	"net/http"
 	"os"
 	"strings"
 
+	"netradar/pkg/version"
 	"netradar/server/auth"
 	"netradar/server/ws"
 )
@@ -15,6 +17,16 @@ func NewRouter(authSvc *auth.AuthService, handler *APIHandler, hub *ws.Hub, stat
 
 	mux.HandleFunc("/ws/agent", hub.HandleAgentWS)
 	mux.HandleFunc("/ws/dashboard", hub.HandleDashboardWS)
+
+	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"version": version.Version,
+		})
+	})
 
 	mux.HandleFunc("/api/auth/login", handler.HandleLogin)
 	mux.HandleFunc("/api/auth/logout", handler.HandleLogout)
@@ -71,12 +83,18 @@ func NewRouter(authSvc *auth.AuthService, handler *APIHandler, hub *ws.Hub, stat
 			}
 
 			path := strings.TrimPrefix(r.URL.Path, "/")
-			if path == "" {
+			if path == "" || path == "index.html" {
 				path = "index.html"
+				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+				w.Header().Set("Pragma", "no-cache")
+				w.Header().Set("Expires", "0")
 			}
 			f, err := staticFS.Open(path)
 			if err != nil {
 				r.URL.Path = "/"
+				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+				w.Header().Set("Pragma", "no-cache")
+				w.Header().Set("Expires", "0")
 			} else {
 				_ = f.Close()
 			}

@@ -12,9 +12,10 @@ import (
 	"netradar/agent/collector"
 	"netradar/agent/config"
 	"netradar/agent/updater"
+	"netradar/pkg/version"
 )
 
-var Version = "v0.1.6"
+var Version = version.Version
 
 func main() {
 	cfg := config.LoadConfig()

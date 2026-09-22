@@ -61,7 +61,7 @@ jobs:
       - name: Cross-Compile Binaries
         run: |
           mkdir -p bin dist_release
-          LDFLAGS="-s -w -buildid= -X main.Version=${VERSION}"
+          LDFLAGS="-s -w -buildid= -X netradar/pkg/version.Version=${VERSION} -X main.Version=${VERSION}"
 
           # -------------------------------------------------------------
           # 1. 编译 NetRadar 控制端 (纯单二进制分发)

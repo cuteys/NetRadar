@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRadarStore } from '../stores/radarStore'
+import { clearAppCache } from '../utils/cache'
 import {
   X,
   Shield,
@@ -10,7 +11,8 @@ import {
   Check,
   AlertCircle,
   Network,
-  Lock
+  Lock,
+  RotateCcw
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -36,6 +38,18 @@ const form = ref({
 const isSaving = ref(false)
 const saveSuccess = ref(false)
 const errorMessage = ref('')
+const isClearingCache = ref(false)
+
+const handleClearCache = async () => {
+  if (isClearingCache.value) return
+  isClearingCache.value = true
+  try {
+    await clearAppCache({ reload: true, preserveAuth: true })
+  } catch (e) {
+    console.error('清理缓存失败:', e)
+    isClearingCache.value = false
+  }
+}
 
 const hasNewVersion = computed(() => {
   const current = (radar.systemSettings?.version || '').replace(/^v/, '')
@@ -159,7 +173,7 @@ onUnmounted(() => {
               <div>
                 <h3 class="font-bold text-base text-slate-900 dark:text-white leading-tight">系统与安全配置</h3>
                 <div class="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                  <span>当前版本: <strong class="text-slate-700 dark:text-slate-300 font-semibold">{{ radar.systemSettings?.version || 'v0.1.6' }}</strong></span>
+                  <span>当前版本: <strong class="text-slate-700 dark:text-slate-300 font-semibold">{{ radar.systemSettings?.version || '---' }}</strong></span>
                   <span v-if="radar.systemSettings?.latest_version" class="text-slate-300 dark:text-slate-600">·</span>
                   <span v-if="radar.systemSettings?.latest_version">
                     最新版本: <strong class="font-semibold" :class="hasNewVersion ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'">{{ radar.systemSettings.latest_version }}</strong>
@@ -170,6 +184,19 @@ onUnmounted(() => {
                   <span v-else-if="radar.systemSettings?.latest_version" class="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-sans font-medium">
                     最新
                   </span>
+
+                  <!-- 清理缓存按钮 (适配 Safari 深度清理与强制刷新) -->
+                  <span class="text-slate-300 dark:text-slate-600">·</span>
+                  <button
+                    type="button"
+                    @click="handleClearCache"
+                    :disabled="isClearingCache"
+                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-sans font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-200/60 dark:bg-slate-700/60 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all cursor-pointer disabled:opacity-50"
+                    title="清理浏览器本地缓存与存储，并强制重新加载（已针对 Safari 深度适配）"
+                  >
+                    <RotateCcw class="w-2.5 h-2.5" :class="isClearingCache ? 'animate-spin' : ''" />
+                    <span>{{ isClearingCache ? '正在清理...' : '清理缓存' }}</span>
+                  </button>
                 </div>
               </div>
             </div>
