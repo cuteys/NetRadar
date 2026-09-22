@@ -20,11 +20,13 @@ import (
 //go:embed dist/*
 var embeddedDist embed.FS
 
+var Version = "v0.1.5"
+
 func main() {
 	cfg := config.LoadConfig()
 
 	log.Printf("==================================================")
-	log.Printf("   NetRadar 控制端")
+	log.Printf("   NetRadar 控制端 (%s)", Version)
 	log.Printf("==================================================")
 	log.Printf("监听地址: %s", cfg.ListenAddr)
 	log.Printf("数据路径: %s", cfg.DBPath)
@@ -114,7 +116,7 @@ func main() {
 	hub := ws.NewHub(cfg, authSvc, geoSvc, ipRefresher, db)
 	hub.SetAgentSettings(storedAddr, storedTLS)
 
-	handler := api.NewAPIHandler(authSvc, hub, db)
+	handler := api.NewAPIHandler(authSvc, hub, db, Version)
 
 	var staticFS fs.FS
 	if subFS, err := fs.Sub(embeddedDist, "dist"); err == nil {

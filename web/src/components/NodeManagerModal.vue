@@ -57,12 +57,12 @@ const installCommand = computed(() => {
   const host = radar.systemSettings?.agent_server_addr || defaultHost
   const token = radar.systemSettings?.agent_token || 'netradar_secret_token_12345'
   const tls = radar.systemSettings?.use_tls ? ' --tls' : ''
-  const proxyPrefix = useGhProxy.value ? 'https://gh-proxy.com/' : ''
+  const proxyPrefix = useGhProxy.value ? 'https://ghfast.top/' : ''
   return `curl -fsSL -k ${proxyPrefix}https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh | sh -s -- -s "${host}" -t "${token}"${tls}`
 })
 
 const uninstallCommand = computed(() => {
-  const proxyPrefix = useGhProxy.value ? 'https://gh-proxy.com/' : ''
+  const proxyPrefix = useGhProxy.value ? 'https://ghfast.top/' : ''
   return `curl -fsSL -k ${proxyPrefix}https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh | sh -s -- --uninstall`
 })
 
@@ -187,9 +187,10 @@ const formatDate = (d?: string) => {
                 <ArrowLeft class="w-3.5 h-3.5" />
                 <span>返回节点列表</span>
               </button>
-              <span class="text-[11px] text-slate-400 font-mono truncate max-w-[140px] sm:max-w-xs text-right">
-                UUID: {{ editingNode.id }}
-              </span>
+              <div class="text-[11px] text-slate-400 font-mono text-right truncate">
+                <span>UUID: {{ editingNode.id }}</span>
+                <span v-if="editingNode.version" class="ml-2 text-emerald-600 dark:text-emerald-400">({{ editingNode.version }})</span>
+              </div>
             </div>
 
             <!-- Edit Node Name -->
@@ -361,7 +362,7 @@ const formatDate = (d?: string) => {
                     v-model="useGhProxy"
                     class="rounded border-slate-300 dark:border-slate-600 text-emerald-500 focus:ring-emerald-400 focus:ring-offset-0"
                   />
-                  <span>大陆加速 (gh-proxy.com)</span>
+                  <span>大陆加速 (ghfast.top)</span>
                 </label>
               </div>
 
@@ -439,6 +440,7 @@ const formatDate = (d?: string) => {
 
                   <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                     <span>UUID: <strong class="text-slate-700 dark:text-slate-300 font-normal">{{ node.id }}</strong></span>
+                    <span>探针版本: <strong class="text-emerald-600 dark:text-emerald-400 font-semibold">{{ node.version || '未知' }}</strong></span>
                     <span v-if="node.ip">IP: {{ compressIP(node.ip) }}</span>
                     <span v-if="node.gateway_lat && node.gateway_lng">坐标: [{{ node.gateway_lng.toFixed(2) }}, {{ node.gateway_lat.toFixed(2) }}]</span>
                     <span v-if="node.os">系统: {{ node.os }}/{{ node.arch }}</span>

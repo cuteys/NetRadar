@@ -129,6 +129,7 @@ func (h *Hub) HandleAgentWS(w http.ResponseWriter, r *http.Request) {
 	}
 	rawName := r.Header.Get("X-NetRadar-Node-Name")
 	nodeName, _ := url.QueryUnescape(rawName)
+	agentVersion := r.Header.Get("X-NetRadar-Version")
 
 	agentPublicIP := r.Header.Get("X-NetRadar-Public-IP")
 	var agentLat, agentLng float64
@@ -169,6 +170,7 @@ func (h *Hub) HandleAgentWS(w http.ResponseWriter, r *http.Request) {
 			ID:         nodeID,
 			Name:       displayName,
 			IP:         effectiveIP,
+			Version:    agentVersion,
 			LastSeen:   time.Now(),
 			IsOnline:   true,
 			GatewayLat: lat,
@@ -178,6 +180,9 @@ func (h *Hub) HandleAgentWS(w http.ResponseWriter, r *http.Request) {
 	} else {
 		node.IsOnline = true
 		node.LastSeen = time.Now()
+		if agentVersion != "" {
+			node.Version = agentVersion
+		}
 		if !node.CustomLocation {
 			if effectiveIP != "" {
 				node.IP = effectiveIP
@@ -241,6 +246,10 @@ func (h *Hub) processAgentPayload(p *model.NodeMetricsPayload, node *model.NodeI
 	node.Arch = p.Arch
 
 	statusChanged := false
+	if p.Version != "" && node.Version != p.Version {
+		node.Version = p.Version
+		statusChanged = true
+	}
 	if (node.Name == "" || node.Name == node.ID) && p.Hostname != "" {
 		node.Name = p.Hostname
 		statusChanged = true

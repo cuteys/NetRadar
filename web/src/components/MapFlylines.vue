@@ -19,6 +19,16 @@ let resizeObserver: ResizeObserver | null = null
 
 const mapMode = ref<'world' | 'china'>('world')
 const activeTrackCount = ref(0)
+const isRefreshing = ref(false)
+let refreshTimer: any = null
+
+const triggerRefreshAnim = () => {
+  isRefreshing.value = true
+  if (refreshTimer) clearTimeout(refreshTimer)
+  refreshTimer = setTimeout(() => {
+    isRefreshing.value = false
+  }, 750)
+}
 
 // 注册地图
 echarts.registerMap('world', worldGeoJson as any)
@@ -142,7 +152,7 @@ const computeControlPoint = (
   const ny = dx / dist
 
   const sign = ny > 0 ? -1 : 1
-  const offset = Math.min(dist * 0.22, 60) * sign
+  const offset = Math.min(dist * 0.16, 42) * sign
 
   return [mx + nx * offset, my + ny * offset]
 }
@@ -220,8 +230,8 @@ const renderHistoricalLines = () => {
     ctx.moveTo(p0[0], p0[1])
     ctx.quadraticCurveTo(control[0], control[1], p1[0], p1[1])
     ctx.strokeStyle = color
-    ctx.lineWidth = isDark ? 1.1 : 1.3
-    ctx.globalAlpha = isDark ? 0.35 : 0.42
+    ctx.lineWidth = isDark ? 0.75 : 0.9
+    ctx.globalAlpha = isDark ? 0.18 : 0.24
     ctx.stroke()
   }
 }
@@ -255,16 +265,16 @@ const renderCanvas = (time: number) => {
 
     const { p0, p1, control, color } = track
 
-    // 绘制弧线底轨
+    // 1. 绘制极轻底轨导线（若隐若现的科技感，绝不抢占视觉）
     ctx.beginPath()
     ctx.moveTo(p0[0], p0[1])
     ctx.quadraticCurveTo(control[0], control[1], p1[0], p1[1])
     ctx.strokeStyle = color
-    ctx.lineWidth = isDark ? 1.2 : 1.4
-    ctx.globalAlpha = isDark ? 0.3 : 0.4
+    ctx.lineWidth = isDark ? 0.75 : 0.85
+    ctx.globalAlpha = isDark ? 0.12 : 0.16
     ctx.stroke()
 
-    // 步进粒子位置
+    // 2. 步进粒子位置
     track.t += track.speed * timeScale
     if (track.t > 1) {
       track.t -= 1
@@ -273,9 +283,9 @@ const renderCanvas = (time: number) => {
     const t = track.t
     const head = getBezierPoint(p0, control, p1, t)
 
-    // 拖尾渐变
-    const tailLength = 0.06
-    const steps = 6
+    // 3. 流线型细彗星拖尾（14阶平滑渐变，由 0.3px 纤细尾部过渡到 1.5px 头部）
+    const tailLength = 0.08
+    const steps = 14
     let prevPoint: [number, number] | null = null
 
     for (let i = 0; i <= steps; i++) {
@@ -285,8 +295,8 @@ const renderCanvas = (time: number) => {
       const pt = getBezierPoint(p0, control, p1, u)
       if (prevPoint) {
         const factor = i / steps
-        const lineWidth = 0.6 + factor * 3.6
-        const alpha = 0.04 + factor * 0.65
+        const lineWidth = 0.3 + factor * 1.2
+        const alpha = 0.01 + factor * factor * 0.75
 
         ctx.beginPath()
         ctx.moveTo(prevPoint[0], prevPoint[1])
@@ -300,17 +310,17 @@ const renderCanvas = (time: number) => {
       prevPoint = pt
     }
 
-    // 粒子光核
+    // 4. 精密微型光核（外层柔和微晕 2.4px + 核心白光点 1.0px）
     ctx.beginPath()
-    ctx.arc(head[0], head[1], 5.0, 0, Math.PI * 2)
+    ctx.arc(head[0], head[1], 2.4, 0, Math.PI * 2)
     ctx.fillStyle = color
-    ctx.globalAlpha = 0.7
+    ctx.globalAlpha = 0.5
     ctx.fill()
 
     ctx.beginPath()
-    ctx.arc(head[0], head[1], 2.0, 0, Math.PI * 2)
+    ctx.arc(head[0], head[1], 1.0, 0, Math.PI * 2)
     ctx.fillStyle = '#ffffff'
-    ctx.globalAlpha = 0.98
+    ctx.globalAlpha = 0.95
     ctx.fill()
   }
 
@@ -367,50 +377,74 @@ const buildSeries = (scatterData: any[] = [], isHistorical = false): any[] => {
     : (radar.activeNode && radar.activeNode.gateway_lng && radar.activeNode.gateway_lat ? [radar.activeNode] : [])
 
   if (nodesToShow.length > 0) {
+    // 探针网关节点：精致微型 effectScatter 呼吸波纹（7.5px），层次丰富且灵动
     series.push({
-      type: 'scatter',
+      type: 'effectScatter',
       coordinateSystem: 'geo',
       symbol: 'circle',
-      symbolSize: 12,
+      symbolSize: 7.5,
+      rippleEffect: {
+        period: 3.5,
+        scale: 2.8,
+        brushType: 'stroke',
+        number: 2,
+      },
       itemStyle: {
         color: colors.routerPoint,
         borderColor: '#ffffff',
-        borderWidth: 2,
+        borderWidth: 1.5,
         shadowColor: colors.routerPoint,
-        shadowBlur: 6,
+        shadowBlur: 8,
       },
       label: {
         show: true,
         position: 'right',
+        distance: 6,
         formatter: (params: any) => params.name,
         color: theme.isDark ? '#e2e8f0' : '#334155',
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: 600,
+        backgroundColor: theme.isDark ? 'rgba(15, 23, 42, 0.75)' : 'rgba(255, 255, 255, 0.85)',
+        padding: [2, 6],
+        borderRadius: 4,
+        borderColor: theme.isDark ? 'rgba(51, 65, 85, 0.6)' : 'rgba(203, 213, 225, 0.6)',
+        borderWidth: 0.5,
       },
       data: nodesToShow.map((n) => ({
         name: n.name,
         value: [n.gateway_lng, n.gateway_lat],
       })),
+      zlevel: 5,
     })
   }
 
+  // 目标外联散点：基准 3.6 ~ 5.0px，细白微边，半透明柔光，避免密集遮挡
   series.push({
     type: 'scatter',
     coordinateSystem: 'geo',
-      symbolSize: isHistorical ? 6.5 : 7.5,
+    symbolSize: (val: any) => {
+      if (isHistorical) return 3.8
+      const bytes = val && val[2] ? val[2] : 0
+      return Math.min(3.6 + Math.log10(Math.max(bytes, 1000) / 1000) * 0.35, 5.0)
+    },
+    itemStyle: {
+      borderColor: 'rgba(255, 255, 255, 0.85)',
+      borderWidth: 0.8,
+      opacity: isHistorical ? 0.75 : 0.88,
+      shadowBlur: 3,
+      shadowColor: 'rgba(0, 0, 0, 0.25)',
+    },
+    emphasis: {
+      scale: 1.3,
       itemStyle: {
         borderColor: '#ffffff',
-        borderWidth: isHistorical ? 1.0 : 1.2,
-        opacity: isHistorical ? 0.9 : 0.95,
+        borderWidth: 1.5,
+        opacity: 1,
+        shadowBlur: 8,
       },
-      emphasis: {
-        scale: 1.35,
-        itemStyle: {
-          borderColor: '#ffffff',
-          borderWidth: 2.0,
-        },
-      },
-      data: scatterData,
+    },
+    data: scatterData,
+    zlevel: 3,
   })
 
   return series
@@ -558,7 +592,7 @@ const syncMapData = (immediate = false) => {
       },
     })
 
-    if (newTracks.length >= 20) break
+    if (newTracks.length >= 14) break
   }
 
   activeTracks = newTracks
@@ -606,9 +640,11 @@ const initMapOption = () => {
 
   const option: echarts.EChartsOption = {
     backgroundColor: 'transparent',
-    animation: false,
-    animationDuration: 0,
-    animationDurationUpdate: 0,
+    animation: true,
+    animationDuration: 500,
+    animationEasing: 'cubicOut',
+    animationDurationUpdate: 450,
+    animationEasingUpdate: 'cubicInOut',
     tooltip: {
       trigger: 'item',
       confine: true,
@@ -816,6 +852,7 @@ onUnmounted(() => {
 // 监听实时流数据更新
 watch(() => radar.activeFlows, () => {
   if (radar.selectedTimeRange === 'realtime') {
+    triggerRefreshAnim()
     updateSeriesOnly()
   }
 })
@@ -823,6 +860,7 @@ watch(() => radar.activeFlows, () => {
 // 监听历史数据更新
 watch(() => radar.historicalDestinations, () => {
   if (radar.selectedTimeRange !== 'realtime') {
+    triggerRefreshAnim()
     syncMapData(true)
   }
 })
@@ -831,6 +869,7 @@ watch(() => radar.historicalDestinations, () => {
 watch(() => radar.selectedTimeRange, (range) => {
   lastFlowSignature = ''
   clearCanvas()
+  triggerRefreshAnim()
   if (range === 'realtime') {
     historicalTracks = []
     startAnimation()
@@ -845,10 +884,12 @@ watch(() => radar.selectedTimeRange, (range) => {
 })
 
 watch(() => radar.selectedDeviceIp, () => {
+  triggerRefreshAnim()
   updateSeriesOnly(true)
 })
 
 watch(() => radar.selectedNodeId, () => {
+  triggerRefreshAnim()
   if (radar.selectedTimeRange === 'realtime') {
     updateSeriesOnly(true)
   } else {
@@ -857,11 +898,13 @@ watch(() => radar.selectedNodeId, () => {
 })
 
 watch(() => radar.activeNode, () => {
+  triggerRefreshAnim()
   updateSeriesOnly(true)
 })
 
 watch(() => radar.isPaused, (paused) => {
   if (!paused && radar.selectedTimeRange === 'realtime') {
+    triggerRefreshAnim()
     updateSeriesOnly(true)
   }
 })
@@ -873,14 +916,31 @@ watch(() => theme.isDark, () => {
 
 <template>
   <div class="apple-glass rounded-3xl p-4 sm:p-5 relative overflow-hidden flex flex-col h-[380px] sm:h-[480px] lg:h-[620px] xl:h-[680px]">
+    <!-- Top Radar Pulse Glow Bar on Refresh -->
+    <div
+      class="absolute top-0 left-0 right-0 h-[2.5px] pointer-events-none z-30 transition-opacity duration-300 overflow-hidden"
+      :class="isRefreshing ? 'opacity-100' : 'opacity-0'"
+    >
+      <div class="h-full w-full bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-radar-sweep"></div>
+    </div>
+
     <!-- Top Bar Controls -->
     <div class="flex items-center justify-between z-20 mb-2 gap-2">
       <div class="flex items-center gap-2">
-        <div class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-          <Globe class="w-4 h-4" />
+        <div
+          class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all duration-300"
+          :class="isRefreshing ? 'ring-2 ring-emerald-500/40 text-emerald-500 dark:text-emerald-400' : ''"
+        >
+          <Globe class="w-4 h-4 transition-transform duration-500" :class="isRefreshing ? 'rotate-45' : ''" />
         </div>
-        <h2 class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-          外联态势感知
+        <h2 class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <span>外联态势感知</span>
+          <span
+            v-if="isRefreshing"
+            class="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-medium tracking-wide animate-pulse"
+          >
+            LIVE
+          </span>
         </h2>
       </div>
 
@@ -940,14 +1000,41 @@ watch(() => theme.isDark, () => {
     <!-- Bottom Indicator -->
     <div class="absolute bottom-3 left-4 sm:left-6 z-20 pointer-events-none flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
       <div v-if="radar.selectedTimeRange === 'realtime'" class="flex items-center gap-1.5 px-3 py-1 rounded-full apple-glass-heavy shadow-xs">
-        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span class="relative flex h-2 w-2">
+          <span
+            class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
+            :class="isRefreshing ? 'animate-ping' : ''"
+          ></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        </span>
         <span>活动飞线: <strong class="text-slate-800 dark:text-slate-200">{{ activeTrackCount }}</strong> 条</span>
       </div>
       <div v-else class="flex items-center gap-1.5 px-3 py-1 rounded-full apple-glass-heavy shadow-xs">
-        <span class="w-2 h-2 rounded-full bg-sky-500"></span>
+        <span class="relative flex h-2 w-2">
+          <span
+            class="absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"
+            :class="isRefreshing ? 'animate-ping' : ''"
+          ></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+        </span>
         <span v-if="radar.isLoadingDestinations">正在加载历史外联分布...</span>
         <span v-else>历史外联: <strong class="text-slate-800 dark:text-slate-200">{{ historicalTracks.length }}</strong> 条轨迹 · {{ radar.historicalDestinations.length }} 个节点 (静态全景)</span>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+@keyframes radar-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-radar-sweep {
+  animation: radar-sweep 0.75s ease-out forwards;
+}
+</style>

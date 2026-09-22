@@ -201,13 +201,18 @@ esac
 
 log_info "系统环境: ${OS}/${TARGET_ARCH}"
 
-DOWNLOADER=""
+# 检测系统下载工具及选项
+USE_TOOL=""
+WGET_EXTRA=""
 if command -v curl >/dev/null 2>&1; then
-    DOWNLOADER="curl -sSL -k --connect-timeout 15 -f"
+    USE_TOOL="curl"
 elif command -v wget >/dev/null 2>&1; then
-    DOWNLOADER="wget --no-check-certificate -qO-"
+    USE_TOOL="wget"
+    if wget --help 2>&1 | grep -qi "no-check-certificate"; then
+        WGET_EXTRA="--no-check-certificate"
+    fi
 else
-    log_error "系统未找到 curl 或 wget"
+    log_error "系统未找到 curl 或 wget 工具，请先安装后再运行本脚本"
 fi
 
 IS_OPENWRT=false
@@ -254,57 +259,127 @@ log_info "安装路径: ${INSTALL_DIR}"
 
 TMP_DIR=$(mktemp -d 2>/dev/null || echo "/tmp/netradar_install")
 mkdir -p "$TMP_DIR"
-ARCHIVE_NAME="agent_${VERSION}_${OS}_${TARGET_ARCH}.tar.gz"
 
+# 自动解析最新版本 Tag (当未手动指定 -v 时)
 if [ "$VERSION" = "latest" ]; then
-    DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/${ARCHIVE_NAME}"
-    GH_PROXY_URL="https://gh-proxy.com/https://github.com/${GITHUB_REPO}/releases/latest/download/${ARCHIVE_NAME}"
-    MIRROR_URL="https://mirror.ghproxy.com/https://github.com/${GITHUB_REPO}/releases/latest/download/${ARCHIVE_NAME}"
-else
-    DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/${ARCHIVE_NAME}"
-    GH_PROXY_URL="https://gh-proxy.com/https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/${ARCHIVE_NAME}"
-    MIRROR_URL="https://mirror.ghproxy.com/https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/${ARCHIVE_NAME}"
+    log_info "正在自动解析 NetRadar Agent 最新版本号..."
+    FETCHED_TAG=""
+
+    # 1. 尝试通过 GitHub Releases API 解析
+    API_ENDPOINTS="
+https://ghfast.top/https://api.github.com/repos/${GITHUB_REPO}/releases/latest
+https://mirror.ghproxy.com/https://api.github.com/repos/${GITHUB_REPO}/releases/latest
+https://api.github.com/repos/${GITHUB_REPO}/releases/latest
+"
+    for api_url in $API_ENDPOINTS; do
+        api_body=""
+        if [ "$USE_TOOL" = "curl" ]; then
+            api_body=$(curl -fsSL -k --connect-timeout 6 -m 10 "$api_url" 2>/dev/null || true)
+        else
+            api_body=$(wget $WGET_EXTRA -qO- -T 6 "$api_url" 2>/dev/null || true)
+        fi
+        tag_val=$(echo "$api_body" | grep -m1 '"tag_name":' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/' || true)
+        if [ -n "$tag_val" ]; then
+            FETCHED_TAG="$tag_val"
+            break
+        fi
+    done
+
+    # 2. 若 API 被频控或不可用，尝试通过网页 302 重定向解析 Location
+    if [ -z "$FETCHED_TAG" ]; then
+        REDIRECT_ENDPOINTS="
+https://ghfast.top/https://github.com/${GITHUB_REPO}/releases/latest
+https://github.com/${GITHUB_REPO}/releases/latest
+"
+        for r_url in $REDIRECT_ENDPOINTS; do
+            loc_header=""
+            if [ "$USE_TOOL" = "curl" ]; then
+                loc_header=$(curl -sI -k --connect-timeout 6 -m 10 "$r_url" 2>/dev/null | grep -i "^location:" | tr -d '\r\n' || true)
+            else
+                loc_header=$(wget $WGET_EXTRA --spider --server-response -T 6 "$r_url" 2>&1 | grep -i "Location:" | tr -d '\r\n' || true)
+            fi
+            tag_val=$(echo "$loc_header" | sed -E 's|.*/tag/([^/?# ]+).*|\1|' || true)
+            if [ -n "$tag_val" ] && [ "$tag_val" != "$loc_header" ]; then
+                FETCHED_TAG="$tag_val"
+                break
+            fi
+        done
+    fi
+
+    if [ -n "$FETCHED_TAG" ]; then
+        VERSION="$FETCHED_TAG"
+        log_info "成功获取最新发布版本: ${VERSION}"
+    else
+        log_warn "未能在线解析到具体版本号，将直接采用最新分发资源 (latest) 下载"
+    fi
 fi
 
-log_info "下载探针程序..."
+# 下载执行器封装函数（带错误日志捕获与输出）
+try_fetch() {
+    target_url="$1"
+    dest_path="$2"
+    source_name="$3"
+    err_log="${TMP_DIR}/fetch_err.log"
+    rm -f "$dest_path" "$err_log"
+
+    printf "  -> 尝试从 [%s] 下载...\n" "$source_name"
+    cmd_exit=0
+
+    if [ "$USE_TOOL" = "curl" ]; then
+        curl -fL -k --connect-timeout 12 -m 120 "$target_url" -o "$dest_path" 2>"$err_log" || cmd_exit=$?
+    else
+        wget $WGET_EXTRA -T 12 -O "$dest_path" "$target_url" 2>"$err_log" || cmd_exit=$?
+    fi
+
+    if [ $cmd_exit -eq 0 ] && [ -s "$dest_path" ]; then
+        file_sz=$(ls -lh "$dest_path" 2>/dev/null | awk '{print $5}' || echo "OK")
+        log_info "下载成功 (大小: ${file_sz})"
+        rm -f "$err_log"
+        return 0
+    else
+        detail_err=""
+        if [ -f "$err_log" ]; then
+            detail_err=$(grep -vE '^\s*$' "$err_log" | tail -n 2 | tr '\n' ' ' | sed 's/^[ \t]*//;s/[ \t]*$//' || true)
+        fi
+        [ -z "$detail_err" ] && detail_err="网络中断或返回空文件 (错误码: ${cmd_exit})"
+        log_warn "下载失败: ${detail_err}"
+        rm -f "$dest_path"
+        return 1
+    fi
+}
+
+log_info "准备下载探针程序 (架构: ${OS}/${TARGET_ARCH}, 版本: ${VERSION})..."
 DOWNLOAD_SUCCESS=false
 
-if $DOWNLOADER "$DOWNLOAD_URL" > "${TMP_DIR}/${ARCHIVE_NAME}" 2>/dev/null && [ -s "${TMP_DIR}/${ARCHIVE_NAME}" ]; then
-    DOWNLOAD_SUCCESS=true
-elif $DOWNLOADER "$GH_PROXY_URL" > "${TMP_DIR}/${ARCHIVE_NAME}" 2>/dev/null && [ -s "${TMP_DIR}/${ARCHIVE_NAME}" ]; then
-    DOWNLOAD_SUCCESS=true
-elif $DOWNLOADER "$MIRROR_URL" > "${TMP_DIR}/${ARCHIVE_NAME}" 2>/dev/null && [ -s "${TMP_DIR}/${ARCHIVE_NAME}" ]; then
-    DOWNLOAD_SUCCESS=true
-fi
-
-if [ "$DOWNLOAD_SUCCESS" = false ] || [ ! -s "${TMP_DIR}/${ARCHIVE_NAME}" ]; then
-    RAW_NAME="agent-${OS}-${TARGET_ARCH}"
-    RAW_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/${RAW_NAME}"
-    RAW_GH_PROXY="https://gh-proxy.com/${RAW_URL}"
-    RAW_MIRROR="https://mirror.ghproxy.com/${RAW_URL}"
-    
-    if $DOWNLOADER "$RAW_URL" > "${TMP_DIR}/agent" 2>/dev/null && [ -s "${TMP_DIR}/agent" ]; then
-        DOWNLOAD_SUCCESS=true
-    elif $DOWNLOADER "$RAW_GH_PROXY" > "${TMP_DIR}/agent" 2>/dev/null && [ -s "${TMP_DIR}/agent" ]; then
-        DOWNLOAD_SUCCESS=true
-    elif $DOWNLOADER "$RAW_MIRROR" > "${TMP_DIR}/agent" 2>/dev/null && [ -s "${TMP_DIR}/agent" ]; then
-        DOWNLOAD_SUCCESS=true
-    fi
+# 构造直连与镜像源地址前缀（纯单二进制文件分发，零解包依赖）
+RAW_NAME="agent-${OS}-${TARGET_ARCH}"
+if [ "$VERSION" != "latest" ]; then
+    DIRECT_RAW="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/${RAW_NAME}"
 else
-    tar -xzf "${TMP_DIR}/${ARCHIVE_NAME}" -C "$TMP_DIR" 2>/dev/null || tar -xf "${TMP_DIR}/${ARCHIVE_NAME}" -C "$TMP_DIR"
+    DIRECT_RAW="https://github.com/${GITHUB_REPO}/releases/latest/download/${RAW_NAME}"
 fi
 
-FOUND_BIN=""
-if [ -f "${TMP_DIR}/agent" ]; then
-    FOUND_BIN="${TMP_DIR}/agent"
-elif [ -f "${TMP_DIR}/agent-${OS}-${TARGET_ARCH}" ]; then
-    FOUND_BIN="${TMP_DIR}/agent-${OS}-${TARGET_ARCH}"
-elif [ -f "${TMP_DIR}/bin/agent" ]; then
-    FOUND_BIN="${TMP_DIR}/bin/agent"
-fi
+MIRROR_SOURCES="
+ghfast.top|https://ghfast.top/${DIRECT_RAW}
+mirror.ghproxy.com|https://mirror.ghproxy.com/${DIRECT_RAW}
+gh-proxy.com|https://gh-proxy.com/${DIRECT_RAW}
+ghproxy.net|https://ghproxy.net/${DIRECT_RAW}
+GitHub-Direct|${DIRECT_RAW}
+"
 
-if [ -z "$FOUND_BIN" ] || [ ! -s "$FOUND_BIN" ]; then
-    log_error "获取二进制文件失败，请检查网络连接"
+for item in $MIRROR_SOURCES; do
+    s_name=$(echo "$item" | cut -d'|' -f1)
+    s_url=$(echo "$item" | cut -d'|' -f2)
+    if [ -n "$s_name" ] && [ -n "$s_url" ]; then
+        if try_fetch "$s_url" "${TMP_DIR}/agent" "${s_name}"; then
+            DOWNLOAD_SUCCESS=true
+            break
+        fi
+    fi
+done
+
+if [ "$DOWNLOAD_SUCCESS" = false ] || [ ! -s "${TMP_DIR}/agent" ]; then
+    log_error "所有加速源与直连均下载失败！\n=======================================================\n可能原因：路由器当前 DNS 无法解析镜像站或外部网络被阻断。\n备选方案：您可在路由器终端手动执行单行下载命令：\n  mkdir -p ${INSTALL_DIR} && curl -fsSL -k \"https://ghfast.top/${DIRECT_RAW}\" -o ${AGENT_BIN} && chmod +x ${AGENT_BIN}\n======================================================="
 fi
 
 if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet netradar-agent 2>/dev/null; then
@@ -312,7 +387,7 @@ if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet netradar-
 fi
 killall agent 2>/dev/null || true
 
-cp -f "$FOUND_BIN" "$AGENT_BIN"
+cp -f "${TMP_DIR}/agent" "$AGENT_BIN"
 chmod +x "$AGENT_BIN"
 rm -rf "$TMP_DIR"
 

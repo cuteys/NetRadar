@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"netradar/pkg/model"
@@ -16,13 +17,18 @@ type APIHandler struct {
 	authService *auth.AuthService
 	hub         *ws.Hub
 	db          *store.Database
+	version     string
+	latestVer   string
+	lastCheck   time.Time
+	mu          sync.Mutex
 }
 
-func NewAPIHandler(authSvc *auth.AuthService, hub *ws.Hub, db *store.Database) *APIHandler {
+func NewAPIHandler(authSvc *auth.AuthService, hub *ws.Hub, db *store.Database, version string) *APIHandler {
 	return &APIHandler{
 		authService: authSvc,
 		hub:         hub,
 		db:          db,
+		version:     version,
 	}
 }
 
@@ -129,12 +135,53 @@ func (h *APIHandler) HandleUpdateNode(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]interface{}{"status": "ok", "node": req})
 }
 
+func (h *APIHandler) getLatestVersion() string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.latestVer != "" && time.Since(h.lastCheck) < 15*time.Minute {
+		return h.latestVer
+	}
+
+	go func() {
+		client := &http.Client{Timeout: 5 * time.Second}
+		apiURLs := []string{
+			"https://ghfast.top/https://api.github.com/repos/cuteys/NetRadar/releases/latest",
+			"https://api.github.com/repos/cuteys/NetRadar/releases/latest",
+		}
+		for _, u := range apiURLs {
+			resp, err := client.Get(u)
+			if err == nil && resp.StatusCode == http.StatusOK {
+				var data struct {
+					TagName string `json:"tag_name"`
+				}
+				if err := json.NewDecoder(resp.Body).Decode(&data); err == nil && data.TagName != "" {
+					resp.Body.Close()
+					h.mu.Lock()
+					h.latestVer = data.TagName
+					h.lastCheck = time.Now()
+					h.mu.Unlock()
+					return
+				}
+				resp.Body.Close()
+			}
+		}
+	}()
+
+	if h.latestVer != "" {
+		return h.latestVer
+	}
+	return h.version
+}
+
 func (h *APIHandler) HandleGetSystemSettings(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, model.SystemSettings{
 		Username:        h.authService.GetUsername(),
 		AgentToken:      h.hub.GetAgentToken(),
 		AgentServerAddr: h.hub.GetAgentServerAddr(),
 		UseTLS:          h.hub.GetUseTLS(),
+		Version:         h.version,
+		LatestVersion:   h.getLatestVersion(),
 	})
 }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRadarStore } from '../stores/radarStore'
 import {
   X,
@@ -36,6 +36,13 @@ const form = ref({
 const isSaving = ref(false)
 const saveSuccess = ref(false)
 const errorMessage = ref('')
+
+const hasNewVersion = computed(() => {
+  const current = (radar.systemSettings?.version || '').replace(/^v/, '')
+  const latest = (radar.systemSettings?.latest_version || '').replace(/^v/, '')
+  if (!current || !latest || current === latest) return false
+  return latest > current
+})
 
 const syncForm = () => {
   if (radar.systemSettings) {
@@ -143,12 +150,29 @@ onUnmounted(() => {
             <X class="w-4 h-4" />
           </button>
 
-          <!-- Header -->
-          <div class="flex items-center gap-3 mb-6">
-            <div class="p-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200/60 dark:border-slate-700/60">
-              <Shield class="w-5 h-5 text-emerald-500" />
+          <!-- Header with Version Info -->
+          <div class="flex items-center justify-between mb-5 pr-8">
+            <div class="flex items-center gap-3">
+              <div class="p-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200/60 dark:border-slate-700/60">
+                <Shield class="w-5 h-5 text-emerald-500" />
+              </div>
+              <div>
+                <h3 class="font-bold text-base text-slate-900 dark:text-white leading-tight">系统与安全配置</h3>
+                <div class="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                  <span>当前版本: <strong class="text-slate-700 dark:text-slate-300 font-semibold">{{ radar.systemSettings?.version || 'v0.1.5' }}</strong></span>
+                  <span v-if="radar.systemSettings?.latest_version" class="text-slate-300 dark:text-slate-600">·</span>
+                  <span v-if="radar.systemSettings?.latest_version">
+                    最新版本: <strong class="font-semibold" :class="hasNewVersion ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'">{{ radar.systemSettings.latest_version }}</strong>
+                  </span>
+                  <span v-if="hasNewVersion" class="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-sans font-medium">
+                    有新版本
+                  </span>
+                  <span v-else-if="radar.systemSettings?.latest_version" class="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-sans font-medium">
+                    最新
+                  </span>
+                </div>
+              </div>
             </div>
-            <h3 class="font-bold text-base text-slate-900 dark:text-white">系统与安全配置</h3>
           </div>
 
           <!-- Error Alert Banner -->

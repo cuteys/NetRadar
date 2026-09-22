@@ -17,6 +17,7 @@ type AgentConfig struct {
 	ServerURL  string
 	Token      string
 	NodeID     string
+	Version    string
 	Interval   int
 	Mock       bool
 }

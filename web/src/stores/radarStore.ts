@@ -65,6 +65,7 @@ export interface NodeInfo {
   os: string
   arch: string
   ip: string
+  version?: string
   is_online: boolean
   rate_in_bps: number
   rate_out_bps: number
@@ -85,6 +86,8 @@ export interface SystemSettings {
   agent_token: string
   agent_server_addr: string
   use_tls: boolean
+  version?: string
+  latest_version?: string
 }
 
 interface NodeSnapshot {

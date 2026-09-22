@@ -186,6 +186,9 @@ func (c *AgentWSClient) connect() error {
 	header := http.Header{}
 	header.Set("X-NetRadar-Token", c.cfg.Token)
 	header.Set("X-NetRadar-Node-ID", c.cfg.NodeID)
+	if c.cfg.Version != "" {
+		header.Set("X-NetRadar-Version", c.cfg.Version)
+	}
 
 	if geo := c.GetGeoInfo(); geo != nil {
 		if geo.IP != "" {

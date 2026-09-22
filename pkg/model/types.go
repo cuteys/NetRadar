@@ -46,6 +46,7 @@ type NodeMetricsPayload struct {
 	PublicIP   string  `json:"public_ip,omitempty"`
 	GatewayLat float64 `json:"gateway_lat,omitempty"`
 	GatewayLng float64 `json:"gateway_lng,omitempty"`
+	Version    string  `json:"version,omitempty"`
 }
 
 type NodeInfo struct {
@@ -100,6 +101,8 @@ type SystemSettings struct {
 	AgentToken      string `json:"agent_token"`
 	AgentServerAddr string `json:"agent_server_addr"`
 	UseTLS          bool   `json:"use_tls"`
+	Version         string `json:"version"`
+	LatestVersion   string `json:"latest_version"`
 }
 
 type UpdateSystemSettingsRequest struct {

@@ -17,9 +17,8 @@ import (
 const (
 	repoOwner     = "cuteys"
 	repoName      = "NetRadar"
-	checkInterval = 1 * time.Hour
+	checkInterval = 10 * time.Minute
 	initialDelay  = 30 * time.Second
-	ghProxyPrefix = "https://gh-proxy.com/"
 )
 
 type githubRelease struct {
@@ -76,8 +75,10 @@ func checkAndUpdate(currentVersion string) {
 func fetchLatestRelease() (*githubRelease, error) {
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", repoOwner, repoName)
 	urls := []string{
+		"https://ghfast.top/" + apiURL,
+		"https://mirror.ghproxy.com/" + apiURL,
+		"https://gh-proxy.com/" + apiURL,
 		apiURL,
-		ghProxyPrefix + apiURL,
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -165,8 +166,10 @@ func performUpdate(rel *githubRelease, targetTag string) error {
 	}
 
 	urls := []string{
+		"https://ghfast.top/" + downloadURL,
+		"https://mirror.ghproxy.com/" + downloadURL,
+		"https://gh-proxy.com/" + downloadURL,
 		downloadURL,
-		ghProxyPrefix + downloadURL,
 	}
 
 	execPath, err := os.Executable()

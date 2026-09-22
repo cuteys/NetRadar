@@ -14,10 +14,11 @@ import (
 	"netradar/agent/updater"
 )
 
-var Version = "v0"
+var Version = "v0.1.5"
 
 func main() {
 	cfg := config.LoadConfig()
+	cfg.Version = Version
 
 	log.Printf("=== NetRadar 探针 (%s) ===", Version)
 	log.Printf("节点 ID:   %s", cfg.NodeID)
@@ -76,6 +77,7 @@ func main() {
 			payload.Hostname, _ = os.Hostname()
 			payload.OS = runtime.GOOS
 			payload.Arch = runtime.GOARCH
+			payload.Version = Version
 
 			if geo := wsClient.GetGeoInfo(); geo != nil {
 				payload.PublicIP = geo.IP
