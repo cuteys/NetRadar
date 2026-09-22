@@ -272,44 +272,66 @@ const displayItems = computed(() => {
           ? 'bg-emerald-50/30 dark:bg-emerald-950/20 border-emerald-400/60 dark:border-emerald-500/50 shadow-xs'
           : 'bg-white/60 dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50 hover:bg-white/90 dark:hover:bg-slate-800/90'"
       >
-        <!-- Top Row: Protocol + Source ➔ Target + Status & Time -->
-        <div class="flex items-center justify-between gap-2">
-          <!-- Left: Protocol Badge + Dual Endpoints Flow -->
-          <div class="flex items-center gap-1.5 min-w-0 flex-1 flex-wrap sm:flex-nowrap">
-            <span
-              class="px-1.5 py-0.5 rounded-md text-[10px] font-bold tracking-wider border flex-shrink-0"
-              :class="getProtocolBadgeClass(item.protocol)"
-            >
-              {{ item.protocol }}
-            </span>
-
-            <!-- Source Device / IP (Full width on desktop, graceful truncation on mobile) -->
-            <div class="flex items-center gap-1 min-w-0 text-xs text-slate-700 dark:text-slate-300">
-              <span class="font-medium truncate max-w-[140px] sm:max-w-[260px] md:max-w-none text-slate-900 dark:text-white" :title="formatDeviceName(item.devName, item.src_ip)">
-                {{ formatDeviceName(item.devName, item.src_ip) }}
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
+          <div class="flex items-center justify-between sm:justify-start gap-1.5 min-w-0 sm:flex-1">
+            <div class="flex items-center gap-1.5 flex-shrink-0">
+              <span
+                class="px-1.5 py-0.5 rounded-md text-[10px] font-bold tracking-wider border flex-shrink-0"
+                :class="getProtocolBadgeClass(item.protocol)"
+              >
+                {{ item.protocol }}
               </span>
-              <span v-if="item.src_port" class="text-slate-400 text-[10px] flex-shrink-0">
-                :{{ item.src_port }}
-              </span>
-              <span v-if="item.nodeName" class="text-[9px] px-1 py-0.2 rounded bg-slate-200/60 dark:bg-slate-700 text-slate-500 dark:text-slate-400 truncate hidden sm:inline flex-shrink-0">
+              <span v-if="item.nodeName" class="text-[9px] px-1 py-0.2 rounded bg-slate-200/60 dark:bg-slate-700 text-slate-500 dark:text-slate-400 truncate flex-shrink-0">
                 {{ item.nodeName }}
               </span>
             </div>
 
-            <!-- Flow Arrow -->
-            <ArrowRight class="w-3 h-3 text-emerald-500 flex-shrink-0 mx-0.5" />
+            <div class="flex sm:hidden items-center gap-1.5 text-[10px] text-slate-400 flex-shrink-0 font-mono">
+              <div
+                v-if="!item.isHistorical && (item.speed_in > 0 || item.speed_out > 0)"
+                class="flex items-center gap-1 px-1.5 py-0.2 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium whitespace-nowrap text-[9px]"
+              >
+                <span class="flex items-center"><ArrowDown class="w-2 h-2 mr-0.5" />{{ formatSpeed(item.speed_in) }}</span>
+                <span class="flex items-center text-sky-600 dark:text-sky-400"><ArrowUp class="w-2 h-2 mr-0.5" />{{ formatSpeed(item.speed_out) }}</span>
+              </div>
+              <span class="flex items-center gap-1 whitespace-nowrap text-[10px]">
+                <span class="w-1.5 h-1.5 rounded-full" :class="item.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'"></span>
+                <span>{{ formatAgo(item.last_active) }}</span>
+              </span>
+            </div>
 
-            <!-- Destination Endpoint (Full width on desktop) -->
-            <div class="flex items-center gap-1 min-w-0 text-xs text-slate-800 dark:text-slate-100 font-semibold">
-              <span class="truncate max-w-[150px] sm:max-w-[300px] md:max-w-none" :title="`${compressIP(item.dst_ip)}:${item.dst_port}`">
+            <div class="hidden sm:flex items-center gap-1.5 min-w-0 flex-1 ml-1">
+              <div class="flex items-center gap-1 min-w-0 text-xs text-slate-700 dark:text-slate-300">
+                <span class="font-medium truncate max-w-[200px] md:max-w-[280px]" :title="formatDeviceName(item.devName, item.src_ip)">
+                  {{ formatDeviceName(item.devName, item.src_ip) }}
+                </span>
+                <span v-if="item.src_port" class="text-slate-400 text-[10px] flex-shrink-0">:{{ item.src_port }}</span>
+              </div>
+              <ArrowRight class="w-3 h-3 text-emerald-500 flex-shrink-0 mx-0.5" />
+              <div class="flex items-center gap-1 min-w-0 text-xs text-slate-800 dark:text-slate-100 font-semibold">
+                <span class="truncate max-w-[220px] md:max-w-[320px]" :title="`${compressIP(item.dst_ip)}:${item.dst_port}`">
+                  {{ compressIP(item.dst_ip) }}:{{ item.dst_port }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex sm:hidden items-center gap-1.5 min-w-0 w-full text-xs py-0.5">
+            <div class="flex items-center gap-0.5 min-w-0 flex-1 text-slate-700 dark:text-slate-300">
+              <span class="font-medium truncate text-slate-900 dark:text-white" :title="formatDeviceName(item.devName, item.src_ip)">
+                {{ formatDeviceName(item.devName, item.src_ip) }}
+              </span>
+              <span v-if="item.src_port" class="text-slate-400 text-[10px] flex-shrink-0">:{{ item.src_port }}</span>
+            </div>
+            <ArrowRight class="w-3 h-3 text-emerald-500 flex-shrink-0 mx-0.5" />
+            <div class="flex items-center gap-0.5 min-w-0 flex-1 justify-end text-slate-800 dark:text-slate-100 font-semibold">
+              <span class="truncate text-right" :title="`${compressIP(item.dst_ip)}:${item.dst_port}`">
                 {{ compressIP(item.dst_ip) }}:{{ item.dst_port }}
               </span>
             </div>
           </div>
 
-          <!-- Right: Live Speed + Active Status & Time (Unified Single Row, Never Expands Height) -->
-          <div class="flex items-center gap-2 text-[10px] text-slate-400 flex-shrink-0 font-mono">
-            <!-- Live Speed (compact inline badge) -->
+          <div class="hidden sm:flex items-center gap-2 text-[10px] text-slate-400 flex-shrink-0 font-mono">
             <div
               v-if="!item.isHistorical && (item.speed_in > 0 || item.speed_out > 0)"
               class="flex items-center gap-1.5 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium whitespace-nowrap"

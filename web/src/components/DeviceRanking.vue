@@ -122,12 +122,12 @@ const toggleSelectDevice = (ip: string) => {
               </div>
 
               <div v-else class="flex items-center gap-1.5 min-w-0">
-                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate font-mono">
+                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate font-mono" :title="dev.ip">
                   {{ formatDeviceName(dev.name, dev.ip) }}
                 </span>
                 <span
                   v-if="radar.selectedNodeId === 'all' && dev.node_id"
-                  class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-normal truncate flex-shrink-0"
+                  class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-normal max-w-[70px] sm:max-w-none truncate flex-shrink-0"
                 >
                   {{ radar.getNodeName(dev.node_id) }}
                 </span>
@@ -148,12 +148,12 @@ const toggleSelectDevice = (ip: string) => {
             </div>
           </div>
 
-          <div v-if="editingIp !== dev.ip" class="flex items-center gap-1.5 text-xs font-mono flex-shrink-0">
-            <span class="flex items-center text-emerald-600 dark:text-emerald-400 font-semibold whitespace-nowrap">
+          <div v-if="editingIp !== dev.ip" class="flex flex-col sm:flex-row items-end sm:items-center gap-0.5 sm:gap-2 text-xs font-mono flex-shrink-0">
+            <span class="flex items-center text-emerald-600 dark:text-emerald-400 font-semibold whitespace-nowrap text-[11px] sm:text-xs">
               <ArrowDown class="w-2.5 h-2.5 mr-0.5" />
               {{ formatSpeed(dev.rate_in_bps) }}
             </span>
-            <span class="flex items-center text-sky-600 dark:text-sky-400 text-[11px] whitespace-nowrap">
+            <span class="flex items-center text-sky-600 dark:text-sky-400 text-[10px] sm:text-[11px] whitespace-nowrap">
               <ArrowUp class="w-2.5 h-2.5 mr-0.5" />
               {{ formatSpeed(dev.rate_out_bps) }}
             </span>

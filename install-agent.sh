@@ -418,10 +418,12 @@ if [ -d "/proc/sys/net/netfilter" ]; then
 fi
 
 RUNNER_SCRIPT="${INSTALL_DIR}/start_agent.sh"
+AGENT_CONFIG="${INSTALL_DIR}/config.yaml"
+
 cat << EOF > "$RUNNER_SCRIPT"
 #!/bin/sh
 if ! pgrep -f "${AGENT_BIN}.*-server" >/dev/null 2>&1; then
-    nohup ${AGENT_BIN} -server "${WS_URL}" -token "${AGENT_TOKEN}" >/dev/null 2>&1 &
+    nohup ${AGENT_BIN} -c "${AGENT_CONFIG}" -server "${WS_URL}" -token "${AGENT_TOKEN}" >/dev/null 2>&1 &
 fi
 EOF
 chmod +x "$RUNNER_SCRIPT"
@@ -436,7 +438,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=${INSTALL_DIR}
-ExecStart=${AGENT_BIN} -server "${WS_URL}" -token "${AGENT_TOKEN}"
+ExecStart=${AGENT_BIN} -c "${AGENT_CONFIG}" -server "${WS_URL}" -token "${AGENT_TOKEN}"
 Restart=always
 RestartSec=3s
 LimitNOFILE=65535
@@ -458,7 +460,8 @@ STOP=10
 
 start_service() {
     procd_open_instance
-    procd_set_param command ${AGENT_BIN} -server "${WS_URL}" -token "${AGENT_TOKEN}"
+    procd_set_param command ${AGENT_BIN} -c "${AGENT_CONFIG}" -server "${WS_URL}" -token "${AGENT_TOKEN}"
+    procd_set_param working_dir "${INSTALL_DIR}"
     procd_set_param respawn 3600 3 0
     procd_set_param stdout 1
     procd_set_param stderr 1
