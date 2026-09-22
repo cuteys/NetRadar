@@ -7,10 +7,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -230,9 +232,30 @@ func performUpdate(rel *githubRelease, targetTag string) error {
 		return fmt.Errorf("替换二进制失败: %w", err)
 	}
 
-	log.Printf("[更新] 已升级到 %s，正在重启...", targetTag)
-	os.Exit(0)
+	log.Printf("[更新] 已升级到 %s，正在执行平滑自重启...", targetTag)
+	restartProcess(execPath)
 	return nil
+}
+
+func restartProcess(execPath string) {
+	// 1. 在 Linux/Unix 上优先使用 syscall.Exec 直接用新可执行文件替换当前进程镜像
+	// 保持原 PID、文件描述符与后台终端环境，无需依赖外部 systemd 或 cron 即可实现零间断即时重启
+	if runtime.GOOS != "windows" {
+		err := syscall.Exec(execPath, os.Args, os.Environ())
+		if err != nil {
+			log.Printf("[更新] syscall.Exec 重启失败: %v，尝试拉起新进程...", err)
+		}
+	}
+
+	// 2. Windows 或 syscall.Exec 不可用时的回退机制：拉起新子进程后安全退出
+	cmd := exec.Command(execPath, os.Args[1:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	if err := cmd.Start(); err != nil {
+		log.Printf("[更新] 启动新进程失败: %v", err)
+	}
+	os.Exit(0)
 }
 
 func getTargetAssetName() string {

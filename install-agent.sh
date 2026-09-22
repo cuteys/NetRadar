@@ -410,8 +410,9 @@ if [ -d "/usr/local/bin" ] && [ -w "/usr/local/bin" ]; then
     ln -sf "$AGENT_BIN" /usr/local/bin/agent 2>/dev/null || true
 fi
 
-# 启用内核连接跟踪流量统计
+# 启用内核连接跟踪流量统计 (双重写入：proc 接口直写 + sysctl 持久化)
 if [ -d "/proc/sys/net/netfilter" ]; then
+    echo 1 > /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null || true
     sysctl -w net.netfilter.nf_conntrack_acct=1 >/dev/null 2>&1 || true
     if [ -d "/etc/sysctl.d" ]; then
         echo "net.netfilter.nf_conntrack_acct = 1" > /etc/sysctl.d/99-netradar.conf 2>/dev/null || true
@@ -427,6 +428,7 @@ AGENT_CONFIG="${INSTALL_DIR}/config.yaml"
 
 cat << EOF > "$RUNNER_SCRIPT"
 #!/bin/sh
+echo 1 > /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null || true
 sysctl -w net.netfilter.nf_conntrack_acct=1 >/dev/null 2>&1 || true
 if ! ps -w 2>/dev/null | grep -v grep | grep -q "${AGENT_BIN}"; then
     chmod +x "${AGENT_BIN}" 2>/dev/null || true
