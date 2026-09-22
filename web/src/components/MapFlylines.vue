@@ -5,7 +5,8 @@ import worldGeoJson from '../assets/world.json'
 import chinaGeoJson from '../assets/china.json'
 import { useRadarStore } from '../stores/radarStore'
 import { useThemeStore } from '../stores/themeStore'
-import { formatBytes } from '../utils/format'
+import { formatBytes, compressIP, formatDeviceName } from '../utils/format'
+import { formatCountry } from '../utils/countryNames'
 import { Globe, RotateCcw } from 'lucide-vue-next'
 
 const radar = useRadarStore()
@@ -498,7 +499,7 @@ const syncMapData = (immediate = false) => {
     activeTracks = []
     activeTrackCount.value = 0
 
-    const hist = radar.historicalDestinations || []
+    const hist = radar.filteredHistoricalDestinations || []
     const scatterData: any[] = []
     const newHistTracks: StaticArcTrack[] = []
     const seen = new Set<string>()
@@ -522,7 +523,7 @@ const syncMapData = (immediate = false) => {
       const dotColor = getHistoricalColor(h.dst_ip || coordKey)
 
       scatterData.push({
-        name: h.city || h.country || h.dst_ip,
+        name: h.city || formatCountry(h.country) || compressIP(h.dst_ip),
         value: [h.to_coord[0], h.to_coord[1], totalBytes],
         coordKey,
         historicalData: h,
@@ -654,7 +655,7 @@ const syncMapData = (immediate = false) => {
 
     const totalBytes = (f.bytes_in || 0) + (f.bytes_out || 0)
     scatterData.push({
-      name: f.city || f.country || f.dst_ip,
+      name: f.city || formatCountry(f.country) || compressIP(f.dst_ip),
       value: [f.to_coord[0], f.to_coord[1], totalBytes],
       coordKey,
       flowData: f,
@@ -734,13 +735,15 @@ const initMapOption = () => {
           if (h) {
             const totalBytes = (h.bytes_in || 0) + (h.bytes_out || 0)
             const lastSeenStr = h.last_seen ? new Date(h.last_seen * 1000).toLocaleString('zh-CN', { hour12: false }) : '近期'
+            const displayCountry = formatCountry(h.country) || '外联节点'
+            const displayDstIP = compressIP(h.dst_ip)
             return `
               <div style="font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
                 <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${params.color || '#38bdf8'}"></span>
-                ${h.country || '外联节点'} · ${h.city || '数据中心'}
+                ${displayCountry} · ${h.city || '数据中心'}
               </div>
               <div style="font-size: 11px; opacity: 0.88; line-height: 1.6;">
-                <div>目标 IP: <span style="font-family: monospace; font-weight: 600;">${h.dst_ip}:${h.dst_port || '-'}</span></div>
+                <div>目标 IP: <span style="font-family: monospace; font-weight: 600;">${displayDstIP}${h.dst_port ? ':' + h.dst_port : ''}</span></div>
                 <div>协议网络: <span style="font-weight: 500;">${h.protocol || 'TCP'}</span> · ${h.isp || '骨干网络'}</div>
                 <div>区间下行: <span style="color: #10b981; font-weight: 600;">${formatBytes(h.bytes_in || 0)}</span></div>
                 <div>区间上行: <span style="color: #0ea5e9; font-weight: 600;">${formatBytes(h.bytes_out || 0)}</span></div>
@@ -755,15 +758,18 @@ const initMapOption = () => {
           if (!d) {
             return `<div style="font-weight: 600; padding: 2px 4px;">${params.name || '边缘节点'}</div>`
           }
+          const displayCountry = formatCountry(d.country) || '外联节点'
+          const displayDstIP = compressIP(d.dst_ip)
+          const displaySrcDevice = formatDeviceName(radar.getDeviceName(d.src_ip), d.src_ip)
           return `
             <div style="font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
               <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${params.color || '#10b981'}"></span>
-              ${d.country || '外联节点'} · ${d.city || '数据中心'}
+              ${displayCountry} · ${d.city || '数据中心'}
             </div>
             <div style="font-size: 11px; opacity: 0.88; line-height: 1.6;">
-              <div>目标 IP: <span style="font-family: monospace; font-weight: 600;">${d.dst_ip}:${d.dst_port}</span></div>
-              <div>来源设备: <span style="font-family: monospace;">${d.src_ip || '-'}</span></div>
-              <div>协议类型: <span style="font-weight: 500;">${d.protocol}</span> · ${d.isp || '骨干网络'}</div>
+              <div>目标 IP: <span style="font-family: monospace; font-weight: 600;">${displayDstIP}${d.dst_port ? ':' + d.dst_port : ''}</span></div>
+              <div>来源设备: <span style="font-family: monospace;">${displaySrcDevice}</span></div>
+              <div>协议类型: <span style="font-weight: 500;">${d.protocol || 'TCP'}</span> · ${d.isp || '骨干网络'}</div>
               <div>实时下行: <span style="color: #10b981; font-weight: 600;">${formatBytes(d.bytes_in)}</span></div>
               <div>实时上行: <span style="color: #0ea5e9; font-weight: 600;">${formatBytes(d.bytes_out)}</span></div>
             </div>
@@ -779,8 +785,8 @@ const initMapOption = () => {
     geo: {
       map: mapMode.value,
       roam: true,
-      zoom: mapMode.value === 'china' ? 1.55 : 1.38,
-      center: mapMode.value === 'china' ? [104.5, 35.5] : [12, 12],
+      zoom: mapMode.value === 'china' ? 1.55 : 1.56,
+      center: mapMode.value === 'china' ? [104.5, 35.5] : [16, 28],
       label: {
         show: false,
       },
@@ -949,6 +955,10 @@ watch(() => radar.selectedTimeRange, (range) => {
 })
 
 watch(() => radar.selectedDeviceIp, () => {
+  updateSeriesOnly(true)
+})
+
+watch(() => radar.searchFilter, () => {
   updateSeriesOnly(true)
 })
 

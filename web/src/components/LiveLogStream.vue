@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRadarStore } from '../stores/radarStore'
 import { formatBytes, formatSpeed, compressIP, formatDeviceName } from '../utils/format'
 import { formatCountry } from '../utils/countryNames'
@@ -14,7 +14,20 @@ import {
 
 const radar = useRadarStore()
 
-const searchQuery = ref('')
+const listContainer = ref<HTMLDivElement | null>(null)
+const searchQuery = computed({
+  get: () => radar.searchFilter,
+  set: (val: string) => {
+    radar.searchFilter = val
+  },
+})
+
+watch(() => radar.searchFilter, () => {
+  if (listContainer.value) {
+    listContainer.value.scrollTop = 0
+  }
+})
+
 const sortBy = ref<'traffic' | 'speed' | 'time'>('traffic')
 const statusFilter = ref<'all' | 'active' | 'closed'>('all')
 
@@ -54,41 +67,15 @@ const formatDuration = (startMs: number, endMs: number) => {
 
 // 实时处理连接列表
 const displayItems = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase()
-  const tokens = query ? query.split(/\s+/).filter(Boolean) : []
-  const matchTokens = (haystack: string) => {
-    if (tokens.length === 0) return true
-    return tokens.every((t) => haystack.includes(t))
-  }
-
   // 1. 历史模式
   if (radar.selectedTimeRange !== 'realtime') {
-    let list = radar.historicalDestinations || []
-    if (tokens.length > 0) {
-      list = list.filter((h) => {
-        const hNodeName = radar.getNodeName(h.node_id)
-        const text = [
-          h.dst_ip,
-          compressIP(h.dst_ip),
-          h.dst_port ? String(h.dst_port) : '',
-          h.dst_port ? `:${h.dst_port}` : '',
-          formatCountry(h.country),
-          h.country || '',
-          h.city || '',
-          h.isp || '',
-          h.protocol || '',
-          hNodeName,
-        ].join(' ').toLowerCase()
-        return matchTokens(text)
-      })
-    }
-    const copy = [...list]
+    const list = [...(radar.filteredHistoricalDestinations || [])]
     if (sortBy.value === 'time') {
-      copy.sort((a, b) => (b.last_seen || 0) - (a.last_seen || 0))
+      list.sort((a, b) => (b.last_seen || 0) - (a.last_seen || 0))
     } else {
-      copy.sort((a, b) => ((b.bytes_in || 0) + (b.bytes_out || 0)) - ((a.bytes_in || 0) + (a.bytes_out || 0)))
+      list.sort((a, b) => ((b.bytes_in || 0) + (b.bytes_out || 0)) - ((a.bytes_in || 0) + (a.bytes_out || 0)))
     }
-    return copy.map((h, idx) => ({
+    return list.map((h, idx) => ({
       isHistorical: true,
       id: `hist_${idx}_${h.dst_ip}_${h.dst_port}_${h.node_id || ''}`,
       protocol: (h.protocol || 'TCP').toUpperCase(),
@@ -116,31 +103,6 @@ const displayItems = computed(() => {
     conns = conns.filter((c) => c.status === 'active')
   } else if (statusFilter.value === 'closed') {
     conns = conns.filter((c) => c.status === 'closed')
-  }
-
-  if (tokens.length > 0) {
-    conns = conns.filter((c) => {
-      const devName = radar.getDeviceName(c.src_ip)
-      const nodeName = radar.getNodeName(c.node_id)
-      const text = [
-        c.src_ip,
-        compressIP(c.src_ip),
-        c.src_port ? String(c.src_port) : '',
-        c.src_port ? `:${c.src_port}` : '',
-        devName,
-        c.dst_ip,
-        compressIP(c.dst_ip),
-        c.dst_port ? String(c.dst_port) : '',
-        c.dst_port ? `:${c.dst_port}` : '',
-        formatCountry(c.country),
-        c.country,
-        c.city,
-        c.isp,
-        c.protocol,
-        nodeName,
-      ].join(' ').toLowerCase()
-      return matchTokens(text)
-    })
   }
 
   const copy = [...conns]
@@ -263,7 +225,7 @@ const displayItems = computed(() => {
     </div>
 
     <!-- Clash-Style Connection Card List -->
-    <div class="flex-1 overflow-y-auto space-y-2 pr-1 text-xs">
+    <div ref="listContainer" class="flex-1 overflow-y-auto space-y-2 pr-1 text-xs">
       <div
         v-for="item in displayItems"
         :key="item.id"

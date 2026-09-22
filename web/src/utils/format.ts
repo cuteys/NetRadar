@@ -89,14 +89,14 @@ export function compressIP(ipStr: string): string {
     parts = rawParts
   }
 
-  // 1. 去除每组 16 位 hextet 的前导 0
+  // 1. 去除每组 16 位 hextet 的前导 0，全零归一化为 '0'
   const normalized = parts.map((p) => {
     if (!p) return '0'
     const hex = p.replace(/^0+/, '')
     return hex === '' ? '0' : hex.toLowerCase()
   })
 
-  // 2. 找到最长的连续 '0' 区间替换为 '::' (至少连续2个0才压缩)
+  // 2. 找到最长的连续 '0' 区间替换为 '::'
   let bestStart = -1
   let bestLen = 0
   let curStart = -1
@@ -121,7 +121,7 @@ export function compressIP(ipStr: string): string {
   }
 
   let result = ''
-  if (bestLen >= 2) {
+  if (bestLen >= 1) {
     const before = normalized.slice(0, bestStart).join(':')
     const after = normalized.slice(bestStart + bestLen).join(':')
     if (before === '' && after === '') {

@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -304,6 +305,9 @@ func (h *Hub) processAgentPayload(p *model.NodeMetricsPayload, node *model.NodeI
 	h.mu.Unlock()
 
 	for _, flow := range p.Flows {
+		flow.SrcIP = normalizeIP(flow.SrcIP)
+		flow.DstIP = normalizeIP(flow.DstIP)
+
 		loc := h.geoService.Lookup(flow.DstIP)
 		flow.Country = loc.Country
 		flow.Region = loc.Region
@@ -564,4 +568,15 @@ func (h *Hub) RenameDevice(ip, newName string) error {
 	}
 	h.mu.Unlock()
 	return h.db.SetDeviceAlias(ip, newName)
+}
+
+func normalizeIP(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	raw = strings.TrimSpace(raw)
+	if ip := net.ParseIP(raw); ip != nil {
+		return ip.String()
+	}
+	return raw
 }

@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, shallowRef, computed, watch } from 'vue'
 import { useAuthStore } from './authStore'
 import { checkVersionAndClearCache } from '../utils/cache'
+import { compressIP } from '../utils/format'
+import { formatCountry } from '../utils/countryNames'
 
 export interface ParticleFlow {
   id: string
@@ -184,7 +186,15 @@ export const useRadarStore = defineStore('radar', () => {
     }
   })
 
-  // 联动所有容器的流过滤
+  const searchFilter = ref('')
+
+  const matchSearchTokens = (tokens: string[], text: string) => {
+    if (tokens.length === 0) return true
+    const lower = text.toLowerCase()
+    return tokens.every((t) => lower.includes(t))
+  }
+
+  // 联动所有容器的流过滤 (包含节点、设备及搜索词联动)
   const filteredFlows = computed(() => {
     let list = activeFlows.value
     if (selectedNodeId.value && selectedNodeId.value !== 'all') {
@@ -192,6 +202,29 @@ export const useRadarStore = defineStore('radar', () => {
     }
     if (selectedDeviceIp.value) {
       list = list.filter((f) => f.src_ip === selectedDeviceIp.value)
+    }
+    const q = searchFilter.value.trim().toLowerCase()
+    if (q) {
+      const tokens = q.split(/\s+/).filter(Boolean)
+      list = list.filter((f) => {
+        const devName = getDeviceName(f.src_ip)
+        const nodeName = getNodeName(f.node_id)
+        const text = [
+          f.src_ip,
+          compressIP(f.src_ip),
+          f.dst_ip,
+          compressIP(f.dst_ip),
+          f.dst_port ? String(f.dst_port) : '',
+          devName,
+          f.country || '',
+          formatCountry(f.country),
+          f.city || '',
+          f.isp || '',
+          f.protocol || '',
+          nodeName,
+        ].join(' ')
+        return matchSearchTokens(tokens, text)
+      })
     }
     return list
   })
@@ -207,7 +240,7 @@ export const useRadarStore = defineStore('radar', () => {
     return list
   })
 
-  // 联动所有容器的连接池过滤
+  // 联动所有容器的连接池过滤 (包含节点、设备及搜索词联动)
   const filteredConnections = computed(() => {
     let list = activeConnections.value
     if (selectedNodeId.value && selectedNodeId.value !== 'all') {
@@ -215,6 +248,55 @@ export const useRadarStore = defineStore('radar', () => {
     }
     if (selectedDeviceIp.value) {
       list = list.filter((c) => c.src_ip === selectedDeviceIp.value)
+    }
+    const q = searchFilter.value.trim().toLowerCase()
+    if (q) {
+      const tokens = q.split(/\s+/).filter(Boolean)
+      list = list.filter((c) => {
+        const devName = getDeviceName(c.src_ip)
+        const nodeName = getNodeName(c.node_id)
+        const text = [
+          c.src_ip,
+          compressIP(c.src_ip),
+          c.src_port ? String(c.src_port) : '',
+          c.dst_ip,
+          compressIP(c.dst_ip),
+          c.dst_port ? String(c.dst_port) : '',
+          devName,
+          c.country || '',
+          formatCountry(c.country),
+          c.city || '',
+          c.isp || '',
+          c.protocol || '',
+          nodeName,
+        ].join(' ')
+        return matchSearchTokens(tokens, text)
+      })
+    }
+    return list
+  })
+
+  // 历史目的地过滤 (包含搜索词联动)
+  const filteredHistoricalDestinations = computed(() => {
+    let list = historicalDestinations.value
+    const q = searchFilter.value.trim().toLowerCase()
+    if (q) {
+      const tokens = q.split(/\s+/).filter(Boolean)
+      list = list.filter((h) => {
+        const nodeName = getNodeName(h.node_id)
+        const text = [
+          h.dst_ip,
+          compressIP(h.dst_ip),
+          h.dst_port ? String(h.dst_port) : '',
+          h.country || '',
+          formatCountry(h.country),
+          h.city || '',
+          h.isp || '',
+          h.protocol || '',
+          nodeName,
+        ].join(' ')
+        return matchSearchTokens(tokens, text)
+      })
     }
     return list
   })
@@ -805,6 +887,8 @@ export const useRadarStore = defineStore('radar', () => {
     cumulativeStats,
     systemSettings,
     historicalDestinations,
+    filteredHistoricalDestinations,
+    searchFilter,
     isLoadingDestinations,
     isLoadingHistory,
     togglePause,
