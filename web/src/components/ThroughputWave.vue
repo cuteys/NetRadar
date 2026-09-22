@@ -193,7 +193,6 @@ watch(() => theme.isDark, () => {
 
 <template>
   <div class="apple-glass rounded-3xl p-4 sm:p-5 flex flex-col h-[320px]">
-    <!-- Header -->
     <div class="flex items-center justify-between mb-2 gap-2">
       <div class="flex items-center gap-2 flex-shrink-0">
         <div class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
@@ -204,7 +203,6 @@ watch(() => theme.isDark, () => {
         </h3>
       </div>
 
-      <!-- Legend -->
       <div class="flex items-center gap-1.5 sm:gap-2.5 text-[11px] sm:text-xs font-mono flex-shrink-0">
         <div class="flex items-center gap-0.5 sm:gap-1 text-emerald-600 dark:text-emerald-400 font-medium whitespace-nowrap">
           <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500"></span>
@@ -219,7 +217,6 @@ watch(() => theme.isDark, () => {
       </div>
     </div>
 
-    <!-- Chart container -->
     <div ref="chartContainer" class="w-full flex-1 min-h-0"></div>
   </div>
 </template>

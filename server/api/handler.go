@@ -146,7 +146,7 @@ func (h *APIHandler) getLatestVersion() string {
 	go func() {
 		client := &http.Client{Timeout: 5 * time.Second}
 		apiURLs := []string{
-			"https://ghfast.top/https://api.github.com/repos/cuteys/NetRadar/releases/latest",
+			"https://gh-proxy.com/https://api.github.com/repos/cuteys/NetRadar/releases/latest",
 			"https://api.github.com/repos/cuteys/NetRadar/releases/latest",
 		}
 		for _, u := range apiURLs {

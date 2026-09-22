@@ -63,24 +63,34 @@ func NewGeoDownloader(dbDir string, onCompleted func()) *GeoDownloader {
 	}
 }
 
+func (d *GeoDownloader) isMissingDatabases() bool {
+	for _, target := range DefaultTargets {
+		fullPath := filepath.Join(d.dbDir, target.FileName)
+		if fi, err := os.Stat(fullPath); err != nil || fi.Size() < target.MinSize {
+			return true
+		}
+	}
+	return false
+}
+
 func (d *GeoDownloader) EnsureDatabases() {
 	if err := os.MkdirAll(d.dbDir, 0755); err != nil {
 		log.Printf("[GeoDownloader] 创建目录失败 %s: %v", d.dbDir, err)
 		return
 	}
 
-	missing := false
-	for _, target := range DefaultTargets {
-		fullPath := filepath.Join(d.dbDir, target.FileName)
-		if fi, err := os.Stat(fullPath); err != nil || fi.Size() < target.MinSize {
-			missing = true
-			break
-		}
-	}
-
-	if missing {
+	if d.isMissingDatabases() {
 		log.Printf("[GeoDownloader] 本地缺少 IP 离线库，后台开始下载...")
-		go d.DownloadAll()
+		go func() {
+			for retry := 1; retry <= 3; retry++ {
+				d.DownloadAll()
+				if !d.isMissingDatabases() {
+					return
+				}
+				log.Printf("[GeoDownloader] 部分数据库未下载成功，将在 %d 秒后重试 (第 %d/3 次)...", retry*15, retry)
+				time.Sleep(time.Duration(retry*15) * time.Second)
+			}
+		}()
 	}
 }
 

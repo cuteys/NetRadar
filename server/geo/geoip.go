@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,11 +24,65 @@ type GeoLocation struct {
 }
 
 type GeoCNRecord struct {
-	Province  string `maxminddb:"province"`
-	City      string `maxminddb:"city"`
-	Districts string `maxminddb:"districts"`
-	ISP       string `maxminddb:"isp"`
-	Net       string `maxminddb:"net"`
+	Province       string `maxminddb:"province"`
+	ProvinceShort  string `maxminddb:"provinceShort"`
+	City           string `maxminddb:"city"`
+	CityShort      string `maxminddb:"cityShort"`
+	Districts      string `maxminddb:"districts"`
+	DistrictsShort string `maxminddb:"districtsShort"`
+	ISP            string `maxminddb:"isp"`
+	Net            string `maxminddb:"net"`
+}
+
+var chinaProvinceCoords = map[string][2]float64{
+	"北京": {116.4074, 39.9042},
+	"天津": {117.2008, 39.0842},
+	"上海": {121.4737, 31.2304},
+	"重庆": {106.5516, 29.5630},
+	"河北": {114.5305, 38.0374},
+	"山西": {112.5627, 37.8735},
+	"辽宁": {123.4294, 41.8357},
+	"吉林": {125.3268, 43.8962},
+	"黑龙江": {126.6617, 45.7423},
+	"江苏": {118.7969, 32.0603},
+	"浙江": {120.1551, 30.2741},
+	"安徽": {117.2849, 31.8612},
+	"福建": {119.2965, 26.0745},
+	"江西": {115.8163, 28.6366},
+	"山东": {117.0208, 36.6686},
+	"河南": {113.7534, 34.7659},
+	"湖北": {114.3419, 30.5465},
+	"湖南": {112.9838, 28.1124},
+	"广东": {113.2644, 23.1291},
+	"海南": {110.3492, 20.0174},
+	"四川": {104.0759, 30.6517},
+	"贵州": {106.7072, 26.5982},
+	"云南": {102.7100, 25.0458},
+	"陕西": {108.9398, 34.3416},
+	"甘肃": {103.8263, 36.0594},
+	"青海": {101.7801, 36.6209},
+	"台湾": {121.5091, 25.0443},
+	"内蒙古": {111.7656, 40.8175},
+	"广西": {108.3275, 22.8155},
+	"西藏": {91.1172, 29.6469},
+	"宁夏": {106.2588, 38.4713},
+	"新疆": {87.6278, 43.7928},
+	"香港": {114.1694, 22.3193},
+	"澳门": {113.5439, 22.1987},
+}
+
+func getProvinceCoord(province, city string) ([2]float64, bool) {
+	for name, coord := range chinaProvinceCoords {
+		if strings.Contains(province, name) || strings.Contains(city, name) {
+			return coord, true
+		}
+	}
+	return [2]float64{}, false
+}
+
+func isDirectMunicipality(name string) bool {
+	return strings.Contains(name, "北京") || strings.Contains(name, "上海") ||
+		strings.Contains(name, "天津") || strings.Contains(name, "重庆")
 }
 
 type ipRule struct {
@@ -50,7 +105,11 @@ type GeoService struct {
 
 func NewGeoService(dbDir string) *GeoService {
 	if dbDir == "" {
-		dbDir = "./data/geoip"
+		if runtime.GOOS == "windows" {
+			dbDir = "./data/geoip"
+		} else {
+			dbDir = "/data/geoip"
+		}
 	}
 
 	gs := &GeoService{
@@ -169,8 +228,8 @@ func (gs *GeoService) Lookup(ipStr string) GeoLocation {
 	asnR := gs.asnReader
 	gs.mu.RUnlock()
 
-	if hasCity {
-		loc, ok := gs.lookupMMDB(parsedIP, cityR, cnR, asnR, hasCN, hasASN)
+	if hasCity || hasCN || hasASN {
+		loc, ok := gs.lookupMMDB(parsedIP, cityR, cnR, asnR, hasCity, hasCN, hasASN)
 		if ok {
 			gs.cacheMu.Lock()
 			if len(gs.cache) < 20000 {
@@ -190,80 +249,145 @@ func (gs *GeoService) Lookup(ipStr string) GeoLocation {
 	return loc
 }
 
-func (gs *GeoService) lookupMMDB(ip net.IP, cityR *geoip2.Reader, cnR *maxminddb.Reader, asnR *geoip2.Reader, hasCN, hasASN bool) (GeoLocation, bool) {
-	cityRec, err := cityR.City(ip)
-	if err != nil || cityRec == nil {
-		return GeoLocation{}, false
-	}
+func (gs *GeoService) lookupMMDB(ip net.IP, cityR *geoip2.Reader, cnR *maxminddb.Reader, asnR *geoip2.Reader, hasCity, hasCN, hasASN bool) (GeoLocation, bool) {
+	var countryName, regionName, cityName, ispName string
+	var lat, lng float64
+	var isChina bool
 
-	countryName := cityRec.Country.Names["zh-CN"]
-	if countryName == "" {
-		countryName = cityRec.Country.Names["en"]
-	}
-	if countryName == "" {
-		countryName = cityRec.RegisteredCountry.Names["zh-CN"]
-		if countryName == "" {
-			countryName = cityRec.RegisteredCountry.Names["en"]
-		}
-	}
-	if countryName == "香港" || countryName == "澳门" || countryName == "台湾" {
-		countryName = "中国" + countryName
-	}
-	if countryName == "" {
-		countryName = "外网节点"
-	}
-
-	var regionName, cityName string
-	if len(cityRec.Subdivisions) > 0 {
-		regionName = cityRec.Subdivisions[0].Names["zh-CN"]
-		if regionName == "" {
-			regionName = cityRec.Subdivisions[0].Names["en"]
-		}
-	}
-	cityName = cityRec.City.Names["zh-CN"]
-	if cityName == "" {
-		cityName = cityRec.City.Names["en"]
-	}
-	if cityName == "" {
-		cityName = regionName
-	}
-	if cityName == "" {
-		cityName = countryName
-	}
-
-	lat := cityRec.Location.Latitude
-	lng := cityRec.Location.Longitude
-
-	ispName := ""
-	isChina := cityRec.Country.IsoCode == "CN" || cityRec.RegisteredCountry.IsoCode == "CN"
-
-	if isChina && hasCN && cnR != nil {
-		var cnRecord GeoCNRecord
+	// 1. 优先检索 GeoCN 高精度中国 IP 库（彻底覆盖省市区与运营商）
+	var cnRecord GeoCNRecord
+	var hasCNData bool
+	if hasCN && cnR != nil {
 		if err := cnR.Lookup(ip, &cnRecord); err == nil {
-			if cnRecord.Province != "" {
-				regionName = cnRecord.Province
-			}
-			if cnRecord.City != "" {
-				cityName = cnRecord.City
-			}
-			if cnRecord.ISP != "" {
-				ispName = cnRecord.ISP
+			if cnRecord.Province != "" || cnRecord.ISP != "" || cnRecord.City != "" {
+				hasCNData = true
+				isChina = true
+				countryName = "中国"
+				if cnRecord.ISP != "" {
+					ispName = cnRecord.ISP
+				}
 			}
 		}
 	}
 
+	// 2. 检索 GeoLite2-City 国际库（获取经纬度与国际归属）
+	if hasCity && cityR != nil {
+		if cityRec, err := cityR.City(ip); err == nil && cityRec != nil {
+			if countryName == "" {
+				countryName = cityRec.Country.Names["zh-CN"]
+				if countryName == "" {
+					countryName = cityRec.Country.Names["en"]
+				}
+				if countryName == "" {
+					countryName = cityRec.RegisteredCountry.Names["zh-CN"]
+					if countryName == "" {
+						countryName = cityRec.RegisteredCountry.Names["en"]
+					}
+				}
+			}
+			if cityRec.Country.IsoCode == "CN" || cityRec.RegisteredCountry.IsoCode == "CN" {
+				isChina = true
+			}
+
+			if len(cityRec.Subdivisions) > 0 && regionName == "" {
+				regionName = cityRec.Subdivisions[0].Names["zh-CN"]
+				if regionName == "" {
+					regionName = cityRec.Subdivisions[0].Names["en"]
+				}
+			}
+
+			if cityName == "" {
+				cityName = cityRec.City.Names["zh-CN"]
+				if cityName == "" {
+					cityName = cityRec.City.Names["en"]
+				}
+			}
+
+			if cityRec.Location.Latitude != 0 || cityRec.Location.Longitude != 0 {
+				lat = cityRec.Location.Latitude
+				lng = cityRec.Location.Longitude
+			}
+		}
+	}
+
+	// 3. 检索 GeoLite2-ASN (补充未知运营商)
 	if ispName == "" && hasASN && asnR != nil {
 		if asnRec, err := asnR.ASN(ip); err == nil && asnRec != nil {
 			ispName = asnRec.AutonomousSystemOrganization
 		}
 	}
-	if ispName == "" {
-		ispName = "骨干网节点"
+
+	// 4. 特殊涉华区域处理
+	if countryName == "香港" || countryName == "澳门" || countryName == "台湾" {
+		countryName = "中国" + countryName
+		isChina = true
 	}
 
-	if lat == 0 && lng == 0 {
-		lat = 31.2304
-		lng = 121.4737
+	// 5. 中国区域深度整合与格式化（彻底消除“中国·中国”与直辖市冗余）
+	if isChina {
+		countryName = "中国"
+
+		if hasCNData {
+			if cnRecord.Province != "" {
+				regionName = cnRecord.Province
+			}
+
+			if cnRecord.City != "" {
+				if cnRecord.Districts != "" {
+					cityName = cnRecord.City + " " + cnRecord.Districts
+				} else {
+					cityName = cnRecord.City
+				}
+			} else if cnRecord.Districts != "" {
+				cityName = cnRecord.Districts
+			} else if cnRecord.Province != "" {
+				cityName = cnRecord.Province
+			}
+		}
+
+		// 直辖市智能处理（避免“北京·北京”或“北京·中国”）
+		if isDirectMunicipality(regionName) {
+			cityName = regionName
+		}
+
+		// 彻底杜绝 cityName 变成 "中国"
+		if cityName == "中国" || cityName == "" {
+			if regionName != "" && regionName != "中国" {
+				cityName = regionName
+			} else {
+				cityName = "骨干网节点"
+			}
+		}
+
+		// 经纬度回退：当 GeoLite2 未能精准定位时，自动通过 GeoCN 省份锚定其省会中心经纬度
+		if lat == 0 && lng == 0 {
+			if coord, found := getProvinceCoord(regionName, cityName); found {
+				lng = coord[0]
+				lat = coord[1]
+			} else {
+				lat = 31.2304
+				lng = 121.4737
+			}
+		}
+	} else {
+		// 外网节点
+		if countryName == "" {
+			countryName = "外网节点"
+		}
+		if cityName == "" {
+			cityName = regionName
+		}
+		if cityName == "" {
+			cityName = countryName
+		}
+		if lat == 0 && lng == 0 {
+			lat = 31.2304
+			lng = 121.4737
+		}
+	}
+
+	if ispName == "" {
+		ispName = "骨干网节点"
 	}
 
 	return GeoLocation{

@@ -75,8 +75,6 @@ func checkAndUpdate(currentVersion string) {
 func fetchLatestRelease() (*githubRelease, error) {
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", repoOwner, repoName)
 	urls := []string{
-		"https://ghfast.top/" + apiURL,
-		"https://mirror.ghproxy.com/" + apiURL,
 		"https://gh-proxy.com/" + apiURL,
 		apiURL,
 	}
@@ -166,8 +164,6 @@ func performUpdate(rel *githubRelease, targetTag string) error {
 	}
 
 	urls := []string{
-		"https://ghfast.top/" + downloadURL,
-		"https://mirror.ghproxy.com/" + downloadURL,
 		"https://gh-proxy.com/" + downloadURL,
 		downloadURL,
 	}

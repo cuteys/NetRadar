@@ -70,7 +70,7 @@ const getHistoricalColor = (identifier: string) => {
   return colorPalette[Math.abs(hash) % colorPalette.length]
 }
 
-// 实时飞线模型
+// 实时飞线模型（支持生命周期淡入淡出、流速粗细动态联动）
 interface FlylineTrack {
   key: string
   color: string
@@ -82,6 +82,26 @@ interface FlylineTrack {
   t: number
   speed: number
   flow: any
+  opacity: number
+  targetOpacity: number
+  baseWidth: number
+  targetBaseWidth: number
+  headRadius: number
+  targetHeadRadius: number
+}
+
+// 根据实时流速计算飞线粗细、发光核大小与前进速度（低速优雅纤细，高速澎湃加粗）
+const calculateTrackDimensions = (flow: any) => {
+  const speedBytes = (flow.speed_in_bps && flow.speed_out_bps)
+    ? (flow.speed_in_bps + flow.speed_out_bps) / 8
+    : ((flow.bytes_in || 0) + (flow.bytes_out || 0))
+
+  const logVal = Math.log10(Math.max(speedBytes, 600) / 600)
+  const baseWidth = Math.min(1.3 + logVal * 0.65, 3.8)
+  const headRadius = Math.min(3.2 + logVal * 0.95, 7.2)
+  const flightSpeed = 0.0011 + Math.min(logVal * 0.00025, 0.0010)
+
+  return { baseWidth, headRadius, flightSpeed }
 }
 
 // 历史静态轨迹线
@@ -102,6 +122,7 @@ let pendingUpdate = false
 let lastFlowSignature = ''
 let updateTimer: any = null
 let lastFrameTime = 0
+let lastGeoAnchorPx: [number, number] | null = null
 
 // 实时流缓存，方便悬浮提示快速读取
 const flowDetailMap = new Map<string, any>()
@@ -238,6 +259,20 @@ const renderCanvas = (time: number) => {
   lastFrameTime = time
   const timeScale = dt / 16.667
 
+  // 1. 实时检测 ECharts 坐标系变动，彻底根治拖动/滚轮缩放/惯性滑动中的飞线偏位
+  const anchorGeoCoord: [number, number] = [105, 35]
+  const curAnchorPx = projectGeoCoord(anchorGeoCoord)
+  if (curAnchorPx) {
+    if (lastGeoAnchorPx) {
+      const dx = curAnchorPx[0] - lastGeoAnchorPx[0]
+      const dy = curAnchorPx[1] - lastGeoAnchorPx[1]
+      if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05) {
+        updateTrackPixels()
+      }
+    }
+    lastGeoAnchorPx = curAnchorPx
+  }
+
   const canvas = particleCanvas.value
   if (!canvas) return
   const ctx = canvas.getContext('2d')
@@ -250,21 +285,34 @@ const renderCanvas = (time: number) => {
   ctx.clearRect(0, 0, width, height)
   const isDark = theme.isDark
 
+  // 2. 状态平滑过渡（淡入淡出、宽度缓动、粒子尺寸缓动）与退场飞线清理
+  activeTracks = activeTracks.filter(track => {
+    track.opacity += (track.targetOpacity - track.opacity) * 0.14 * timeScale
+    track.baseWidth += (track.targetBaseWidth - track.baseWidth) * 0.12 * timeScale
+    track.headRadius += (track.targetHeadRadius - track.headRadius) * 0.12 * timeScale
+
+    if (track.targetOpacity === 0 && track.opacity < 0.02) {
+      return false
+    }
+    return true
+  })
+
   for (const track of activeTracks) {
     if (!track.p0 || !track.p1 || !track.control) continue
+    if (track.opacity <= 0.01) continue
 
-    const { p0, p1, control, color } = track
+    const { p0, p1, control, color, opacity, baseWidth, headRadius } = track
 
-    // 1. 绘制底轨导线（适度加粗，清晰可见且兼顾科技感）
+    // 3. 绘制底轨导线（随流速动态粗细）
     ctx.beginPath()
     ctx.moveTo(p0[0], p0[1])
     ctx.quadraticCurveTo(control[0], control[1], p1[0], p1[1])
     ctx.strokeStyle = color
-    ctx.lineWidth = isDark ? 1.4 : 1.6
-    ctx.globalAlpha = isDark ? 0.22 : 0.28
+    ctx.lineWidth = baseWidth * (isDark ? 0.95 : 1.05)
+    ctx.globalAlpha = (isDark ? 0.22 : 0.28) * opacity
     ctx.stroke()
 
-    // 2. 步进粒子位置
+    // 4. 步进粒子位置
     track.t += track.speed * timeScale
     if (track.t > 1) {
       track.t -= 1
@@ -273,7 +321,7 @@ const renderCanvas = (time: number) => {
     const t = track.t
     const head = getBezierPoint(p0, control, p1, t)
 
-    // 3. 流线型彗星拖尾（平滑过渡，头部加粗至 2.6px）
+    // 5. 流线型彗星拖尾（随流速动态加粗）
     const tailLength = 0.10
     const steps = 14
     let prevPoint: [number, number] | null = null
@@ -285,8 +333,8 @@ const renderCanvas = (time: number) => {
       const pt = getBezierPoint(p0, control, p1, u)
       if (prevPoint) {
         const factor = i / steps
-        const lineWidth = 0.6 + factor * 2.0
-        const alpha = 0.02 + factor * factor * 0.82
+        const lineWidth = 0.5 + factor * (baseWidth * 1.35)
+        const alpha = (0.02 + factor * factor * 0.82) * opacity
 
         ctx.beginPath()
         ctx.moveTo(prevPoint[0], prevPoint[1])
@@ -300,17 +348,17 @@ const renderCanvas = (time: number) => {
       prevPoint = pt
     }
 
-    // 4. 发光粒子核（外层光晕 4.2px + 核心白光点 1.8px）
+    // 6. 发光粒子核（随流速动态扩展光晕与白炽光核）
     ctx.beginPath()
-    ctx.arc(head[0], head[1], 4.2, 0, Math.PI * 2)
+    ctx.arc(head[0], head[1], headRadius, 0, Math.PI * 2)
     ctx.fillStyle = color
-    ctx.globalAlpha = 0.55
+    ctx.globalAlpha = 0.55 * opacity
     ctx.fill()
 
     ctx.beginPath()
-    ctx.arc(head[0], head[1], 1.8, 0, Math.PI * 2)
+    ctx.arc(head[0], head[1], Math.max(1.6, headRadius * 0.36), 0, Math.PI * 2)
     ctx.fillStyle = '#ffffff'
-    ctx.globalAlpha = 0.95
+    ctx.globalAlpha = 0.95 * opacity
     ctx.fill()
   }
 
@@ -367,32 +415,32 @@ const buildSeries = (scatterData: any[] = [], isHistorical = false): any[] => {
     : (radar.activeNode && radar.activeNode.gateway_lng && radar.activeNode.gateway_lat ? [radar.activeNode] : [])
 
   if (nodesToShow.length > 0) {
-    // 探针网关节点：精致 effectScatter 呼吸波纹（8.5px）
+    // 探针网关节点：呼吸波纹（提升至 11px，光环更醒目）
     series.push({
       type: 'effectScatter',
       coordinateSystem: 'geo',
       symbol: 'circle',
-      symbolSize: 8.5,
+      symbolSize: 11,
       rippleEffect: {
         period: 3.5,
-        scale: 2.8,
+        scale: 3.2,
         brushType: 'stroke',
         number: 2,
       },
       itemStyle: {
         color: colors.routerPoint,
         borderColor: '#ffffff',
-        borderWidth: 1.5,
+        borderWidth: 2,
         shadowColor: colors.routerPoint,
-        shadowBlur: 8,
+        shadowBlur: 10,
       },
       label: {
         show: true,
         position: 'right',
-        distance: 6,
+        distance: 8,
         formatter: (params: any) => params.name,
         color: theme.isDark ? '#e2e8f0' : '#334155',
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: 600,
         backgroundColor: theme.isDark ? 'rgba(15, 23, 42, 0.75)' : 'rgba(255, 255, 255, 0.85)',
         padding: [2, 6],
@@ -408,29 +456,29 @@ const buildSeries = (scatterData: any[] = [], isHistorical = false): any[] => {
     })
   }
 
-  // 目标外联散点：基准 4.5 ~ 6.5px，清晰柔光
+  // 目标外联散点：大幅调大点位（基准 8.5 ~ 14.5px），清晰柔光、方便查看与悬停
   series.push({
     type: 'scatter',
     coordinateSystem: 'geo',
     symbolSize: (val: any) => {
-      if (isHistorical) return 4.5
+      if (isHistorical) return 8.5
       const bytes = val && val[2] ? val[2] : 0
-      return Math.min(4.5 + Math.log10(Math.max(bytes, 1000) / 1000) * 0.45, 6.5)
+      return Math.min(8.5 + Math.log10(Math.max(bytes, 1000) / 1000) * 1.5, 14.5)
     },
     itemStyle: {
-      borderColor: 'rgba(255, 255, 255, 0.9)',
-      borderWidth: 1.0,
-      opacity: isHistorical ? 0.78 : 0.9,
-      shadowBlur: 4,
-      shadowColor: 'rgba(0, 0, 0, 0.25)',
+      borderColor: 'rgba(255, 255, 255, 0.95)',
+      borderWidth: 1.5,
+      opacity: isHistorical ? 0.85 : 0.95,
+      shadowBlur: 6,
+      shadowColor: 'rgba(0, 0, 0, 0.35)',
     },
     emphasis: {
-      scale: 1.3,
+      scale: 1.35,
       itemStyle: {
         borderColor: '#ffffff',
-        borderWidth: 1.5,
+        borderWidth: 2.0,
         opacity: 1,
-        shadowBlur: 8,
+        shadowBlur: 12,
       },
     },
     data: scatterData,
@@ -454,7 +502,7 @@ const syncMapData = (immediate = false) => {
     const scatterData: any[] = []
     const newHistTracks: StaticArcTrack[] = []
     const seen = new Set<string>()
-    const origin = gatewayCoord.value
+    const defaultOrigin = gatewayCoord.value
 
     for (const h of hist) {
       if (!h.to_coord || h.to_coord.length < 2) continue
@@ -482,6 +530,15 @@ const syncMapData = (immediate = false) => {
           color: dotColor,
         },
       })
+
+      // 智能匹配对应的探针网关节点位置，多节点不再聚集到单个节点
+      let origin = defaultOrigin
+      if (h.node_id && radar.nodes && radar.nodes.length > 0) {
+        const matchedNode = radar.nodes.find((n) => n.id === h.node_id)
+        if (matchedNode && matchedNode.gateway_lng && matchedNode.gateway_lat) {
+          origin = [matchedNode.gateway_lng, matchedNode.gateway_lat]
+        }
+      }
 
       if (origin) {
         const p0 = projectGeoCoord(origin)
@@ -528,6 +585,7 @@ const syncMapData = (immediate = false) => {
   const newTracks: FlylineTrack[] = []
   const scatterData: any[] = []
   const seenCoords = new Set<string>()
+  const incomingKeys = new Set<string>()
 
   for (const f of sortedFlows) {
     if (!f.to_coord || f.to_coord.length < 2) continue
@@ -546,32 +604,55 @@ const syncMapData = (immediate = false) => {
 
     const color = f.color || '#10b981'
     const key = `${f.dst_ip}_${coordKey}`
+    incomingKeys.add(key)
 
+    const dims = calculateTrackDimensions(f)
     const existing = activeTracks.find(t => t.key === key)
-    const t = existing ? existing.t : Math.random() * 0.8
-    const totalBytes = f.bytes_in + f.bytes_out
-    const speed = 0.0011 + Math.min(totalBytes / 10000000, 0.0009)
 
-    const p0 = immediate ? null : (existing?.p0 || null)
-    const p1 = immediate ? null : (existing?.p1 || null)
-    const control = immediate ? null : (existing?.control || null)
+    if (existing) {
+      existing.flow = f
+      existing.color = color
+      existing.targetOpacity = 1
+      existing.targetBaseWidth = dims.baseWidth
+      existing.targetHeadRadius = dims.headRadius
+      existing.speed = dims.flightSpeed
+      if (immediate || !existing.p0 || !existing.p1 || !existing.control) {
+        existing.p0 = projectGeoCoord(existing.originCoord)
+        existing.p1 = projectGeoCoord(existing.targetCoord)
+        if (existing.p0 && existing.p1) {
+          existing.control = computeControlPoint(existing.p0, existing.p1)
+        }
+      }
+      newTracks.push(existing)
+    } else {
+      const trackOrigin = (f.from_coord && f.from_coord[0] && f.from_coord[1]) ? f.from_coord : origin
+      if (trackOrigin) {
+        const p0 = projectGeoCoord(trackOrigin)
+        const p1 = projectGeoCoord([f.to_coord[0], f.to_coord[1]])
+        const control = (p0 && p1) ? computeControlPoint(p0, p1) : null
 
-    const trackOrigin = (f.from_coord && f.from_coord[0] && f.from_coord[1]) ? f.from_coord : origin
-    if (trackOrigin) {
-      newTracks.push({
-        key,
-        color,
-        originCoord: trackOrigin,
-        targetCoord: [f.to_coord[0], f.to_coord[1]],
-        p0,
-        p1,
-        control,
-        t,
-        speed,
-        flow: f,
-      })
+        newTracks.push({
+          key,
+          color,
+          originCoord: trackOrigin,
+          targetCoord: [f.to_coord[0], f.to_coord[1]],
+          p0,
+          p1,
+          control,
+          t: 0,
+          speed: dims.flightSpeed,
+          flow: f,
+          opacity: 0,
+          targetOpacity: 1,
+          baseWidth: dims.baseWidth,
+          targetBaseWidth: dims.baseWidth,
+          headRadius: dims.headRadius,
+          targetHeadRadius: dims.headRadius,
+        })
+      }
     }
 
+    const totalBytes = (f.bytes_in || 0) + (f.bytes_out || 0)
     scatterData.push({
       name: f.city || f.country || f.dst_ip,
       value: [f.to_coord[0], f.to_coord[1], totalBytes],
@@ -585,18 +666,16 @@ const syncMapData = (immediate = false) => {
     if (newTracks.length >= 14) break
   }
 
-  activeTracks = newTracks
-  activeTrackCount.value = activeTracks.length
-
-  for (const track of activeTracks) {
-    if (!track.p0 || !track.p1 || !track.control) {
-      track.p0 = projectGeoCoord(track.originCoord)
-      track.p1 = projectGeoCoord(track.targetCoord)
-      if (track.p0 && track.p1) {
-        track.control = computeControlPoint(track.p0, track.p1)
-      }
+  // 保留正在退场的旧航线平滑淡出，避免突兀消失
+  for (const oldTrack of activeTracks) {
+    if (!incomingKeys.has(oldTrack.key) && oldTrack.opacity > 0.04) {
+      oldTrack.targetOpacity = 0
+      newTracks.push(oldTrack)
     }
   }
+
+  activeTracks = newTracks
+  activeTrackCount.value = activeTracks.filter(t => t.targetOpacity > 0).length
 
   const currentSig = `real_${scatterData.map(s => s.coordKey).sort().join('|')}`
   if (immediate || currentSig !== lastFlowSignature) {
@@ -631,10 +710,9 @@ const initMapOption = () => {
   const option: echarts.EChartsOption = {
     backgroundColor: 'transparent',
     animation: true,
-    animationDuration: 500,
+    animationDuration: 400,
     animationEasing: 'cubicOut',
-    animationDurationUpdate: 450,
-    animationEasingUpdate: 'cubicInOut',
+    animationDurationUpdate: 0,
     tooltip: {
       trigger: 'item',
       confine: true,

@@ -94,6 +94,7 @@ export interface SystemSettings {
 interface NodeSnapshot {
   node_id: string
   timestamp: number
+  interval: number
   lastReceived: number
   summary: {
     rate_in_bps: number
@@ -252,6 +253,34 @@ export const useRadarStore = defineStore('radar', () => {
     return nodes.value.find((n) => n.id === selectedNodeId.value) || null
   })
 
+  const nodeMap = computed(() => {
+    const map = new Map<string, NodeInfo>()
+    for (const n of nodes.value) {
+      map.set(n.id, n)
+    }
+    return map
+  })
+
+  const getNodeName = (nodeId?: string) => {
+    if (!nodeId) return '未知节点'
+    const n = nodeMap.value.get(nodeId)
+    return n ? (n.name || n.id) : nodeId
+  }
+
+  const deviceNameMap = computed(() => {
+    const map = new Map<string, string>()
+    for (const d of topDevices.value) {
+      if (d.name) {
+        map.set(d.ip, d.name)
+      }
+    }
+    return map
+  })
+
+  const getDeviceName = (ip: string) => {
+    return deviceNameMap.value.get(ip) || ip
+  }
+
   // ----------------------------------------------------
   // 固定 2 秒平稳时钟节流器与聚合计算引擎
   // ----------------------------------------------------
@@ -378,10 +407,11 @@ export const useRadarStore = defineStore('radar', () => {
       const connKey = `${f.node_id}_${f.protocol}_${f.src_ip}:${sPort}_${f.dst_ip}:${f.dst_port}`
       seenThisTick.add(connKey)
 
+      const intervalSec = nodeSnapshotMap.get(f.node_id)?.interval || 2.0
       const existing = connMap.get(connKey)
       if (existing) {
-        existing.speed_in_bps = Math.round(f.bytes_in / 2.0)
-        existing.speed_out_bps = Math.round(f.bytes_out / 2.0)
+        existing.speed_in_bps = Math.round(f.bytes_in / intervalSec)
+        existing.speed_out_bps = Math.round(f.bytes_out / intervalSec)
         existing.total_in += f.bytes_in
         existing.total_out += f.bytes_out
         existing.last_active = now
@@ -402,8 +432,8 @@ export const useRadarStore = defineStore('radar', () => {
           color: f.color || '',
           from_coord: f.from_coord,
           to_coord: f.to_coord,
-          speed_in_bps: Math.round(f.bytes_in / 2.0),
-          speed_out_bps: Math.round(f.bytes_out / 2.0),
+          speed_in_bps: Math.round(f.bytes_in / intervalSec),
+          speed_out_bps: Math.round(f.bytes_out / intervalSec),
           total_in: f.bytes_in,
           total_out: f.bytes_out,
           created_at: now,
@@ -514,9 +544,11 @@ export const useRadarStore = defineStore('radar', () => {
   const handleMessage = (data: any) => {
     if (data.type === 'metrics') {
       const nodeId = data.node_id || 'unknown'
+      const rawInterval = Number(data.interval)
       nodeSnapshotMap.set(nodeId, {
         node_id: nodeId,
         timestamp: data.timestamp || Date.now(),
+        interval: rawInterval > 0 ? rawInterval : 2.0,
         lastReceived: Date.now(),
         summary: data.summary || {
           rate_in_bps: 0,
@@ -750,11 +782,15 @@ export const useRadarStore = defineStore('radar', () => {
     activeConns,
     totalRequests,
     nodes,
+    nodeMap,
+    getNodeName,
     activeNode,
     selectedNodeId,
     selectedDeviceIp,
     selectedTimeRange,
     topDevices,
+    deviceNameMap,
+    getDeviceName,
     protoDist,
     countryDist,
     effectiveProtoDist,

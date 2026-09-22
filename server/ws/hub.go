@@ -338,8 +338,8 @@ func (h *Hub) processAgentPayload(p *model.NodeMetricsPayload, node *model.NodeI
 			h.mu.Lock()
 			dev, ok := lanDevices[flow.SrcIP]
 			if !ok {
-				customName, isCustom := h.db.GetDeviceAliasDirect(flow.SrcIP)
-				name := customName
+				alias, isCustom := h.db.GetDeviceAliasDirect(flow.SrcIP)
+				name := alias
 				if name == "" {
 					name = flow.SrcIP
 				}
@@ -353,9 +353,7 @@ func (h *Hub) processAgentPayload(p *model.NodeMetricsPayload, node *model.NodeI
 					LastActive: time.Now().Unix(),
 				}
 				lanDevices[flow.SrcIP] = dev
-			}
-
-			if alias, ok := h.db.GetDeviceAliasDirect(flow.SrcIP); ok && alias != "" {
+			} else if alias, hasAlias := h.db.GetDeviceAliasDirect(flow.SrcIP); hasAlias && alias != "" {
 				dev.Name = alias
 				dev.IsCustom = true
 			}

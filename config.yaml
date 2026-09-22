@@ -1,6 +1,0 @@
-# NetRadar Agent 配置文件
-server: "ws://127.0.0.1:8899/ws/agent"
-token: "netradar_secret_token_12345"
-uuid: "60a2c24b-e2af-40bd-be7a-26c68a65fe21"
-name: "ChuiYan"
-interval: 2

@@ -281,8 +281,7 @@ if [ "$VERSION" = "latest" ]; then
 
     # 1. 尝试通过 GitHub Releases API 解析
     API_ENDPOINTS="
-https://ghfast.top/https://api.github.com/repos/${GITHUB_REPO}/releases/latest
-https://mirror.ghproxy.com/https://api.github.com/repos/${GITHUB_REPO}/releases/latest
+https://gh-proxy.com/https://api.github.com/repos/${GITHUB_REPO}/releases/latest
 https://api.github.com/repos/${GITHUB_REPO}/releases/latest
 "
     for api_url in $API_ENDPOINTS; do
@@ -302,7 +301,7 @@ https://api.github.com/repos/${GITHUB_REPO}/releases/latest
     # 2. 若 API 被频控或不可用，尝试通过网页 302 重定向解析 Location
     if [ -z "$FETCHED_TAG" ]; then
         REDIRECT_ENDPOINTS="
-https://ghfast.top/https://github.com/${GITHUB_REPO}/releases/latest
+https://gh-proxy.com/https://github.com/${GITHUB_REPO}/releases/latest
 https://github.com/${GITHUB_REPO}/releases/latest
 "
         for r_url in $REDIRECT_ENDPOINTS; do
@@ -374,10 +373,7 @@ else
 fi
 
 MIRROR_SOURCES="
-ghfast.top|https://ghfast.top/${DIRECT_RAW}
-mirror.ghproxy.com|https://mirror.ghproxy.com/${DIRECT_RAW}
 gh-proxy.com|https://gh-proxy.com/${DIRECT_RAW}
-ghproxy.net|https://ghproxy.net/${DIRECT_RAW}
 GitHub-Direct|${DIRECT_RAW}
 "
 
@@ -393,7 +389,7 @@ for item in $MIRROR_SOURCES; do
 done
 
 if [ "$DOWNLOAD_SUCCESS" = false ] || [ ! -s "${TMP_DIR}/agent" ]; then
-    log_error "所有加速源与直连均下载失败！\n=======================================================\n可能原因：路由器当前 DNS 无法解析镜像站或外部网络被阻断。\n备选方案：您可在路由器终端手动执行单行下载命令：\n  mkdir -p ${INSTALL_DIR} && curl -fsSL -k \"https://ghfast.top/${DIRECT_RAW}\" -o ${AGENT_BIN} && chmod +x ${AGENT_BIN}\n======================================================="
+    log_error "所有加速源与直连均下载失败！\n=======================================================\n可能原因：路由器当前 DNS 无法解析镜像站或外部网络被阻断。\n备选方案：您可在路由器终端手动执行单行下载命令：\n  mkdir -p ${INSTALL_DIR} && curl -fsSL -k \"https://gh-proxy.com/${DIRECT_RAW}\" -o ${AGENT_BIN} && chmod +x ${AGENT_BIN}\n======================================================="
 fi
 
 if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet netradar-agent 2>/dev/null; then

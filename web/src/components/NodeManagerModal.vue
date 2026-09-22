@@ -57,12 +57,12 @@ const installCommand = computed(() => {
   const host = radar.systemSettings?.agent_server_addr || defaultHost
   const token = radar.systemSettings?.agent_token || 'netradar_secret_token_12345'
   const tls = radar.systemSettings?.use_tls ? ' --tls' : ''
-  const proxyPrefix = useGhProxy.value ? 'https://ghfast.top/' : ''
+  const proxyPrefix = useGhProxy.value ? 'https://gh-proxy.com/' : ''
   return `curl -fsSL -k ${proxyPrefix}https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh | sh -s -- -s "${host}" -t "${token}"${tls}`
 })
 
 const uninstallCommand = computed(() => {
-  const proxyPrefix = useGhProxy.value ? 'https://ghfast.top/' : ''
+  const proxyPrefix = useGhProxy.value ? 'https://gh-proxy.com/' : ''
   return `curl -fsSL -k ${proxyPrefix}https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh | sh -s -- --uninstall`
 })
 
@@ -362,7 +362,7 @@ const formatDate = (d?: string) => {
                     v-model="useGhProxy"
                     class="rounded border-slate-300 dark:border-slate-600 text-emerald-500 focus:ring-emerald-400 focus:ring-offset-0"
                   />
-                  <span>大陆加速 (ghfast.top)</span>
+                  <span>国内加速 (gh-proxy.com)</span>
                 </label>
               </div>
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRadarStore } from '../stores/radarStore'
-import { formatSpeed, compressIP } from '../utils/format'
+import { formatSpeed, compressIP, formatDeviceName } from '../utils/format'
 import {
   Smartphone,
   Laptop,
@@ -53,12 +53,6 @@ const saveRename = async (ip: string, event: Event) => {
 const cancelRename = (event: Event) => {
   event.stopPropagation()
   editingIp.value = null
-}
-
-const getNodeName = (nodeId?: string) => {
-  if (!nodeId) return ''
-  const n = (radar.nodes || []).find((item) => item.id === nodeId)
-  return n ? n.name : ''
 }
 
 const toggleSelectDevice = (ip: string) => {
@@ -127,24 +121,24 @@ const toggleSelectDevice = (ip: string) => {
                 </button>
               </div>
 
-              <div v-else class="flex items-center gap-1.5 min-w-0 flex-wrap">
+              <div v-else class="flex items-center gap-1.5 min-w-0">
                 <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate font-mono">
-                  {{ dev.name }}
+                  {{ formatDeviceName(dev.name, dev.ip) }}
                 </span>
                 <span
                   v-if="radar.selectedNodeId === 'all' && dev.node_id"
-                  class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-normal truncate"
+                  class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-normal truncate flex-shrink-0"
                 >
-                  {{ getNodeName(dev.node_id) }}
+                  {{ radar.getNodeName(dev.node_id) }}
                 </span>
                 <span
                   v-if="dev.is_custom && dev.name !== dev.ip"
-                  class="text-[10px] text-slate-400 font-mono truncate hidden sm:inline"
+                  class="text-[10px] text-slate-400 font-mono truncate hidden sm:inline flex-shrink-0"
                 >
                   ({{ compressIP(dev.ip) }})
                 </span>
                 <button
-                  @click="startRename(dev.ip, dev.name, $event)"
+                  @click="startRename(dev.ip, formatDeviceName(dev.name, dev.ip), $event)"
                   class="p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors flex-shrink-0"
                   title="重命名该设备"
                 >

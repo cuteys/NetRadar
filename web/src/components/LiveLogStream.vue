@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRadarStore } from '../stores/radarStore'
-import { formatBytes, formatSpeed, compressIP } from '../utils/format'
+import { formatBytes, formatSpeed, compressIP, formatDeviceName } from '../utils/format'
 import { formatCountry } from '../utils/countryNames'
 import {
   Terminal,
@@ -31,19 +31,6 @@ const getProtocolBadgeClass = (proto: string) => {
   }
 }
 
-// 获取设备名称
-const getDeviceName = (ip: string, nodeId?: string) => {
-  const dev = radar.topDevices.find((d) => d.ip === ip && (!nodeId || !d.node_id || d.node_id === nodeId))
-  return dev ? dev.name : ''
-}
-
-// 获取节点名称
-const getNodeName = (nodeId?: string) => {
-  if (!nodeId) return ''
-  const n = (radar.nodes || []).find((item) => item.id === nodeId)
-  return n ? n.name : ''
-}
-
 // 格式化相对时间
 const formatAgo = (timestampMs: number) => {
   if (!timestampMs) return '刚刚'
@@ -68,16 +55,31 @@ const formatDuration = (startMs: number, endMs: number) => {
 // 实时处理连接列表
 const displayItems = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
+  const tokens = query ? query.split(/\s+/).filter(Boolean) : []
+  const matchTokens = (haystack: string) => {
+    if (tokens.length === 0) return true
+    return tokens.every((t) => haystack.includes(t))
+  }
 
   // 1. 历史模式
   if (radar.selectedTimeRange !== 'realtime') {
     let list = radar.historicalDestinations || []
-    if (query) {
+    if (tokens.length > 0) {
       list = list.filter((h) => {
-        const dest = `${compressIP(h.dst_ip)}:${h.dst_port}`.toLowerCase()
-        const geo = `${formatCountry(h.country)} ${h.city || ''} ${h.isp || ''}`.toLowerCase()
-        const proto = (h.protocol || '').toLowerCase()
-        return dest.includes(query) || geo.includes(query) || proto.includes(query)
+        const hNodeName = radar.getNodeName(h.node_id)
+        const text = [
+          h.dst_ip,
+          compressIP(h.dst_ip),
+          h.dst_port ? String(h.dst_port) : '',
+          h.dst_port ? `:${h.dst_port}` : '',
+          formatCountry(h.country),
+          h.country || '',
+          h.city || '',
+          h.isp || '',
+          h.protocol || '',
+          hNodeName,
+        ].join(' ').toLowerCase()
+        return matchTokens(text)
       })
     }
     const copy = [...list]
@@ -88,9 +90,9 @@ const displayItems = computed(() => {
     }
     return copy.map((h, idx) => ({
       isHistorical: true,
-      id: `hist_${idx}_${h.dst_ip}_${h.dst_port}`,
+      id: `hist_${idx}_${h.dst_ip}_${h.dst_port}_${h.node_id || ''}`,
       protocol: (h.protocol || 'TCP').toUpperCase(),
-      src_ip: '全网关聚合',
+      src_ip: '历史聚合',
       src_port: undefined as number | undefined,
       devName: '全网关归档',
       dst_ip: h.dst_ip,
@@ -105,11 +107,10 @@ const displayItems = computed(() => {
       last_active: h.last_seen ? h.last_seen * 1000 : Date.now(),
       status: 'closed' as const,
       duration: '',
-      nodeName: '',
+      nodeName: radar.getNodeName(h.node_id),
     }))
   }
 
-  // 2. 实时模式：仿 Clash 连接面板展示
   let conns = radar.filteredConnections
   if (statusFilter.value === 'active') {
     conns = conns.filter((c) => c.status === 'active')
@@ -117,14 +118,28 @@ const displayItems = computed(() => {
     conns = conns.filter((c) => c.status === 'closed')
   }
 
-  if (query) {
+  if (tokens.length > 0) {
     conns = conns.filter((c) => {
-      const src = `${compressIP(c.src_ip)}:${c.src_port || ''} ${getDeviceName(c.src_ip, c.node_id)}`.toLowerCase()
-      const dst = `${compressIP(c.dst_ip)}:${c.dst_port}`.toLowerCase()
-      const geo = `${formatCountry(c.country)} ${c.city || ''} ${c.isp || ''}`.toLowerCase()
-      const proto = c.protocol.toLowerCase()
-      const node = getNodeName(c.node_id).toLowerCase()
-      return src.includes(query) || dst.includes(query) || geo.includes(query) || proto.includes(query) || node.includes(query)
+      const devName = radar.getDeviceName(c.src_ip)
+      const nodeName = radar.getNodeName(c.node_id)
+      const text = [
+        c.src_ip,
+        compressIP(c.src_ip),
+        c.src_port ? String(c.src_port) : '',
+        c.src_port ? `:${c.src_port}` : '',
+        devName,
+        c.dst_ip,
+        compressIP(c.dst_ip),
+        c.dst_port ? String(c.dst_port) : '',
+        c.dst_port ? `:${c.dst_port}` : '',
+        formatCountry(c.country),
+        c.country,
+        c.city,
+        c.isp,
+        c.protocol,
+        nodeName,
+      ].join(' ').toLowerCase()
+      return matchTokens(text)
     })
   }
 
@@ -143,7 +158,7 @@ const displayItems = computed(() => {
     protocol: c.protocol,
     src_ip: c.src_ip,
     src_port: c.src_port,
-    devName: getDeviceName(c.src_ip, c.node_id),
+    devName: radar.getDeviceName(c.src_ip),
     dst_ip: c.dst_ip,
     dst_port: c.dst_port,
     country: c.country,
@@ -156,7 +171,7 @@ const displayItems = computed(() => {
     last_active: c.last_active,
     status: c.status,
     duration: formatDuration(c.created_at, c.last_active),
-    nodeName: radar.selectedNodeId === 'all' ? getNodeName(c.node_id) : '',
+    nodeName: radar.selectedNodeId === 'all' ? radar.getNodeName(c.node_id) : '',
   }))
 })
 </script>
@@ -252,10 +267,13 @@ const displayItems = computed(() => {
       <div
         v-for="item in displayItems"
         :key="item.id"
-        class="p-2.5 sm:p-3 rounded-2xl bg-white/60 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50 hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all font-mono shadow-2xs space-y-1.5"
+        class="p-2.5 sm:p-3 rounded-2xl transition-all font-mono shadow-2xs space-y-1.5 border"
+        :class="item.status === 'active' && (item.speed_in > 0 || item.speed_out > 0)
+          ? 'bg-emerald-50/30 dark:bg-emerald-950/20 border-emerald-400/60 dark:border-emerald-500/50 shadow-xs'
+          : 'bg-white/60 dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50 hover:bg-white/90 dark:hover:bg-slate-800/90'"
       >
         <!-- Top Row: Protocol + Source ➔ Target + Status & Time -->
-        <div class="flex items-start justify-between gap-2">
+        <div class="flex items-center justify-between gap-2">
           <!-- Left: Protocol Badge + Dual Endpoints Flow -->
           <div class="flex items-center gap-1.5 min-w-0 flex-1 flex-wrap sm:flex-nowrap">
             <span
@@ -265,10 +283,10 @@ const displayItems = computed(() => {
               {{ item.protocol }}
             </span>
 
-            <!-- Source Device / IP -->
+            <!-- Source Device / IP (Full width on desktop, graceful truncation on mobile) -->
             <div class="flex items-center gap-1 min-w-0 text-xs text-slate-700 dark:text-slate-300">
-              <span class="font-medium truncate max-w-[130px] sm:max-w-[180px] text-slate-900 dark:text-white" :title="item.devName || item.src_ip">
-                {{ item.devName || compressIP(item.src_ip) || '本机/网关' }}
+              <span class="font-medium truncate max-w-[140px] sm:max-w-[260px] md:max-w-none text-slate-900 dark:text-white" :title="formatDeviceName(item.devName, item.src_ip)">
+                {{ formatDeviceName(item.devName, item.src_ip) }}
               </span>
               <span v-if="item.src_port" class="text-slate-400 text-[10px] flex-shrink-0">
                 :{{ item.src_port }}
@@ -281,40 +299,41 @@ const displayItems = computed(() => {
             <!-- Flow Arrow -->
             <ArrowRight class="w-3 h-3 text-emerald-500 flex-shrink-0 mx-0.5" />
 
-            <!-- Destination Endpoint -->
+            <!-- Destination Endpoint (Full width on desktop) -->
             <div class="flex items-center gap-1 min-w-0 text-xs text-slate-800 dark:text-slate-100 font-semibold">
-              <span class="truncate max-w-[150px] sm:max-w-[220px]" :title="`${compressIP(item.dst_ip)}:${item.dst_port}`">
+              <span class="truncate max-w-[150px] sm:max-w-[300px] md:max-w-none" :title="`${compressIP(item.dst_ip)}:${item.dst_port}`">
                 {{ compressIP(item.dst_ip) }}:{{ item.dst_port }}
               </span>
             </div>
           </div>
 
-          <!-- Right: Active Status & Time (Top) + Live Speed (Bottom) -->
-          <div class="flex flex-col items-end gap-1 text-[10px] text-slate-400 flex-shrink-0 pt-0.5 font-mono">
-            <div class="flex items-center gap-1.5">
-              <span v-if="item.duration" class="hidden md:inline text-slate-400">
-                {{ item.duration }}
-              </span>
-              <span class="flex items-center gap-1 whitespace-nowrap">
-                <span
-                  class="w-1.5 h-1.5 rounded-full"
-                  :class="item.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'"
-                ></span>
-                <span>{{ formatAgo(item.last_active) }}</span>
-              </span>
-            </div>
-
-            <!-- Live Speed (relocated below time) -->
-            <div v-if="!item.isHistorical && (item.speed_in > 0 || item.speed_out > 0)" class="flex items-center gap-1.5 text-[10px]">
-              <span class="text-emerald-600 dark:text-emerald-400 font-medium flex items-center whitespace-nowrap">
+          <!-- Right: Live Speed + Active Status & Time (Unified Single Row, Never Expands Height) -->
+          <div class="flex items-center gap-2 text-[10px] text-slate-400 flex-shrink-0 font-mono">
+            <!-- Live Speed (compact inline badge) -->
+            <div
+              v-if="!item.isHistorical && (item.speed_in > 0 || item.speed_out > 0)"
+              class="flex items-center gap-1.5 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium whitespace-nowrap"
+            >
+              <span class="flex items-center">
                 <ArrowDown class="w-2.5 h-2.5 mr-0.5" />
                 {{ formatSpeed(item.speed_in) }}
               </span>
-              <span class="text-sky-600 dark:text-sky-400 font-medium flex items-center whitespace-nowrap">
+              <span class="flex items-center text-sky-600 dark:text-sky-400">
                 <ArrowUp class="w-2.5 h-2.5 mr-0.5" />
                 {{ formatSpeed(item.speed_out) }}
               </span>
             </div>
+
+            <span v-if="item.duration" class="hidden md:inline text-slate-400 whitespace-nowrap">
+              {{ item.duration }}
+            </span>
+            <span class="flex items-center gap-1 whitespace-nowrap">
+              <span
+                class="w-1.5 h-1.5 rounded-full"
+                :class="item.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'"
+              ></span>
+              <span>{{ formatAgo(item.last_active) }}</span>
+            </span>
           </div>
         </div>
 
@@ -322,7 +341,7 @@ const displayItems = computed(() => {
         <div class="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100/60 dark:border-slate-700/40 text-slate-500 dark:text-slate-400 gap-2">
           <!-- Geo & ISP Info -->
           <div class="truncate text-slate-400 text-[10px] sm:text-[11px] min-w-0 flex-1">
-            <span>{{ formatCountry(item.country) }}</span><span v-if="item.city">·{{ item.city }}</span>
+            <span>{{ formatCountry(item.country) }}</span><span v-if="item.city && item.city !== item.country && item.city !== formatCountry(item.country)">·{{ item.city }}</span>
             <span v-if="item.isp" class="hidden sm:inline"> ({{ item.isp }})</span>
           </div>
 

@@ -518,6 +518,7 @@ func (d *Database) GetHistoricalDestinations(nodeID string, sinceTimestamp int64
 	if nodeID == "" || nodeID == "all" {
 		query = `
 			SELECT
+				COALESCE(MAX(node_id), '') as node_id,
 				dst_ip, dst_port, protocol, country, city, isp,
 				latitude, longitude,
 				SUM(bytes_in) as total_in,
@@ -533,6 +534,7 @@ func (d *Database) GetHistoricalDestinations(nodeID string, sinceTimestamp int64
 	} else {
 		query = `
 			SELECT
+				node_id,
 				dst_ip, dst_port, protocol, country, city, isp,
 				latitude, longitude,
 				bytes_in, bytes_out, last_seen
@@ -552,13 +554,14 @@ func (d *Database) GetHistoricalDestinations(nodeID string, sinceTimestamp int64
 
 	var results []map[string]interface{}
 	for rows.Next() {
-		var dstIP, protocol, country, city, isp string
+		var nID, dstIP, protocol, country, city, isp string
 		var dstPort int
 		var lat, lng float64
 		var bytesIn, bytesOut, lastSeen int64
 
-		if err := rows.Scan(&dstIP, &dstPort, &protocol, &country, &city, &isp, &lat, &lng, &bytesIn, &bytesOut, &lastSeen); err == nil {
+		if err := rows.Scan(&nID, &dstIP, &dstPort, &protocol, &country, &city, &isp, &lat, &lng, &bytesIn, &bytesOut, &lastSeen); err == nil {
 			results = append(results, map[string]interface{}{
+				"node_id":   nID,
 				"dst_ip":    dstIP,
 				"dst_port":  dstPort,
 				"protocol":  protocol,

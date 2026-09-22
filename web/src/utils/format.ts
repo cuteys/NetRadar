@@ -42,39 +42,61 @@ export function getProtocolColor(proto: string): string {
   }
 }
 
-// RFC 5952 IPv6 精简压缩（去除前导 0，将连续为 0 的块压缩为 ::）
+// RFC 5952 IPv6 规范压缩（彻底去除前导 0，将最长连续为 0 的块压缩为 ::）
 export function compressIP(ipStr: string): string {
-  if (!ipStr || !ipStr.includes(':')) {
-    return ipStr || ''
+  if (!ipStr) return ''
+  let ip = ipStr.trim()
+  if (!ip.includes(':')) {
+    return ip
   }
 
-  let ip = ipStr.trim()
+  let prefix = ''
+  if (ip.startsWith('Client ')) {
+    prefix = 'Client '
+    ip = ip.slice(7).trim()
+  }
+
   let portSuffix = ''
   if (ip.startsWith('[') && ip.includes(']')) {
     const endBracket = ip.indexOf(']')
     portSuffix = ip.slice(endBracket + 1)
     ip = ip.slice(1, endBracket)
+  } else if (!ip.includes('[') && ip.includes('.')) {
+    // 可能是 IPv4 映射地址或混合形式
+    return ipStr
   }
 
-  const parts = ip.split(':')
-  if (parts.length < 3) {
+  // 分离可能存在的端口号 (例如未带括号的末尾端口如 ::1:8080)
+  // 标准 IPv6 最多 8 组（7 个冒号），如果超过则最后一部分可能是端口
+  const rawParts = ip.split(':')
+  if (rawParts.length < 3) {
     return ipStr
+  }
+
+  // 展开现有的 :: 以便寻找最长的全零序列
+  let parts: string[] = []
+  if (ip.includes('::')) {
+    const halves = ip.split('::')
+    const left = halves[0] ? halves[0].split(':') : []
+    const right = halves[1] ? halves[1].split(':') : []
+    const missing = 8 - (left.length + right.length)
+    parts = [...left]
+    for (let i = 0; i < missing; i++) {
+      parts.push('0')
+    }
+    parts.push(...right)
+  } else {
+    parts = rawParts
   }
 
   // 1. 去除每组 16 位 hextet 的前导 0
   const normalized = parts.map((p) => {
-    if (p === '') return ''
+    if (!p) return '0'
     const hex = p.replace(/^0+/, '')
     return hex === '' ? '0' : hex.toLowerCase()
   })
 
-  // 如果原本已包含 ::，只处理各块的前导 0
-  if (ip.includes('::')) {
-    const joined = normalized.join(':').replace(/:{3,}/g, '::')
-    return portSuffix ? `[${joined}]${portSuffix}` : joined
-  }
-
-  // 2. 找到最长的连续 '0' 区间替换为 '::'
+  // 2. 找到最长的连续 '0' 区间替换为 '::' (至少连续2个0才压缩)
   let bestStart = -1
   let bestLen = 0
   let curStart = -1
@@ -102,14 +124,30 @@ export function compressIP(ipStr: string): string {
   if (bestLen >= 2) {
     const before = normalized.slice(0, bestStart).join(':')
     const after = normalized.slice(bestStart + bestLen).join(':')
-    result = `${before}::${after}`
-    if (result.startsWith(':') && !result.startsWith('::')) {
-      result = ':' + result
+    if (before === '' && after === '') {
+      result = '::'
+    } else if (before === '') {
+      result = `::${after}`
+    } else if (after === '') {
+      result = `${before}::`
+    } else {
+      result = `${before}::${after}`
     }
   } else {
     result = normalized.join(':')
   }
 
-  return portSuffix ? `[${result}]${portSuffix}` : result
+  const out = portSuffix ? `[${result}]${portSuffix}` : result
+  return prefix ? `${prefix}${out}` : out
+}
+
+// 终端名称格式化：如果自定义名称直接返回，否则将未压缩的 IPv6 彻底精简化
+export function formatDeviceName(devName?: string, ip?: string): string {
+  if (!devName && !ip) return '本机/网关'
+  const target = devName || ip || ''
+  if (target.includes(':')) {
+    return compressIP(target)
+  }
+  return target
 }
 

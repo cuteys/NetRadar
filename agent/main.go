@@ -47,7 +47,10 @@ func main() {
 	defer wsClient.Close()
 
 	tracker := collector.NewDeltaTracker()
-	mockGen := collector.NewMockCollector()
+	var mockGen *collector.MockCollector
+	if useMock {
+		mockGen = collector.NewMockCollector()
+	}
 
 	ticker := time.NewTicker(time.Duration(cfg.Interval) * time.Second)
 	defer ticker.Stop()
