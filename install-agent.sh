@@ -428,7 +428,8 @@ AGENT_CONFIG="${INSTALL_DIR}/config.yaml"
 cat << EOF > "$RUNNER_SCRIPT"
 #!/bin/sh
 if ! ps -w 2>/dev/null | grep -v grep | grep -q "${AGENT_BIN}"; then
-    nohup ${AGENT_BIN} -c "${AGENT_CONFIG}" -server "${WS_URL}" -token "${AGENT_TOKEN}" >/dev/null 2>&1 &
+    chmod +x "${AGENT_BIN}" 2>/dev/null || true
+    ${AGENT_BIN} -c "${AGENT_CONFIG}" -server "${WS_URL}" -token "${AGENT_TOKEN}" >/tmp/netradar-agent.log 2>&1 &
 fi
 EOF
 chmod +x "$RUNNER_SCRIPT"
