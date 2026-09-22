@@ -39,7 +39,22 @@ const selectedOption = computed(() => {
   return props.options.find((o) => o.value === props.modelValue)
 })
 
+const alignRight = ref(false)
+
+const checkAlignment = () => {
+  if (!dropdownRef.value) return
+  const rect = dropdownRef.value.getBoundingClientRect()
+  if (props.placement === 'right') {
+    alignRight.value = rect.right >= 230
+  } else {
+    alignRight.value = rect.left + 230 > (window.innerWidth || 360)
+  }
+}
+
 const toggleDropdown = () => {
+  if (!isOpen.value) {
+    checkAlignment()
+  }
   isOpen.value = !isOpen.value
 }
 
@@ -117,8 +132,8 @@ onUnmounted(() => {
     >
       <div
         v-if="isOpen"
-        class="absolute mt-1.5 z-50 rounded-2xl apple-glass-heavy shadow-xl border border-slate-200/80 dark:border-slate-700/80 p-1.5 backdrop-blur-xl max-h-64 overflow-y-auto"
-        :class="[menuWidthClass, placement === 'right' ? 'right-0' : 'left-0']"
+        class="absolute mt-1.5 z-50 rounded-2xl apple-glass-heavy shadow-xl border border-slate-200/80 dark:border-slate-700/80 p-1.5 backdrop-blur-xl max-h-64 overflow-y-auto max-w-[calc(100vw-24px)]"
+        :class="[menuWidthClass, alignRight ? 'right-0' : 'left-0']"
       >
         <div class="space-y-0.5">
           <button

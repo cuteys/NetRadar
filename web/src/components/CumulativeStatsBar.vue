@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watch, computed } from 'vue'
 import { useRadarStore } from '../stores/radarStore'
-import { formatBytes, formatSpeed } from '../utils/format'
+import { formatBytes, formatSpeed, compressIP } from '../utils/format'
 import AppleSelect, { type DropdownOption } from './AppleSelect.vue'
 import {
   Clock,
@@ -54,8 +54,9 @@ const deviceOptions = computed<DropdownOption[]>(() => {
     : radar.topDevices.filter((d) => !d.node_id || d.node_id === radar.selectedNodeId)
 
   for (const dev of filtered) {
+    const ipDisplay = compressIP(dev.ip)
     const nodeName = isAll && dev.node_id ? getNodeName(dev.node_id) : ''
-    const sub = nodeName ? `${dev.ip} · ${nodeName}` : (dev.ip !== dev.name ? dev.ip : undefined)
+    const sub = nodeName ? `${ipDisplay} · ${nodeName}` : (dev.ip !== dev.name ? ipDisplay : undefined)
     list.push({
       label: dev.name,
       value: dev.ip,
@@ -69,10 +70,10 @@ const deviceOptions = computed<DropdownOption[]>(() => {
 <template>
   <div class="apple-glass rounded-3xl p-3.5 sm:p-5 mb-4 sm:mb-5 flex flex-col gap-3 sm:gap-4">
     <!-- Top Row: Time Range Selector & Device Filter -->
-    <div class="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 border-b border-slate-200/50 dark:border-slate-800/50 pb-3">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/50 dark:border-slate-800/50 pb-3">
       <!-- Time Range Pills -->
-      <div class="flex items-center gap-1.5 sm:gap-2">
-        <span class="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+      <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+        <span class="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1 whitespace-nowrap">
           <Clock class="w-3.5 h-3.5" />
           时间范围:
         </span>
@@ -81,7 +82,7 @@ const deviceOptions = computed<DropdownOption[]>(() => {
             v-for="tr in timeRanges"
             :key="tr.value"
             @click="setTimeRange(tr.value)"
-            class="px-2 sm:px-2.5 py-1 rounded-lg font-medium transition-all text-xs"
+            class="px-2 sm:px-2.5 py-1 rounded-lg font-medium transition-all text-xs whitespace-nowrap"
             :class="radar.selectedTimeRange === tr.value ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-xs' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
           >
             {{ tr.label }}
@@ -91,16 +92,16 @@ const deviceOptions = computed<DropdownOption[]>(() => {
 
       <!-- Device Filter Dropdown -->
       <div class="flex items-center gap-1.5 sm:gap-2">
-        <span class="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+        <span class="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1 whitespace-nowrap">
           <Filter class="w-3.5 h-3.5" />
           设备过滤:
         </span>
         <AppleSelect
           v-model="radar.selectedDeviceIp"
           :options="deviceOptions"
-          buttonClass="bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 border border-slate-200/80 dark:border-slate-700/80 rounded-xl px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200 max-w-[200px] sm:max-w-xs cursor-pointer transition-colors shadow-2xs"
-          menuWidthClass="w-60"
-          placement="right"
+          buttonClass="bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 border border-slate-200/80 dark:border-slate-700/80 rounded-xl px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200 min-w-[140px] max-w-[220px] sm:max-w-xs cursor-pointer transition-colors shadow-2xs"
+          menuWidthClass="w-64"
+          placement="left"
         />
       </div>
     </div>

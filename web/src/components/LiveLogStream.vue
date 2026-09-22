@@ -1,21 +1,15 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useRadarStore, type ConnectionItem } from '../stores/radarStore'
-import { formatBytes, formatSpeed } from '../utils/format'
+import { useRadarStore } from '../stores/radarStore'
+import { formatBytes, formatSpeed, compressIP } from '../utils/format'
 import { formatCountry } from '../utils/countryNames'
 import {
   Terminal,
-  Shield,
   Search,
   ArrowDown,
   ArrowUp,
   Activity,
-  Clock,
   ArrowRight,
-  Filter,
-  Layers,
-  CheckCircle2,
-  XCircle,
 } from 'lucide-vue-next'
 
 const radar = useRadarStore()
@@ -55,11 +49,11 @@ const formatAgo = (timestampMs: number) => {
   if (!timestampMs) return '刚刚'
   const diffSec = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000))
   if (diffSec < 3) return '刚刚'
-  if (diffSec < 60) return `${diffSec}秒前`
+  if (diffSec < 60) return `${diffSec}s前`
   const diffMin = Math.floor(diffSec / 60)
-  if (diffMin < 60) return `${diffMin}分钟前`
+  if (diffMin < 60) return `${diffMin}m前`
   const diffHour = Math.floor(diffMin / 60)
-  return `${diffHour}小时前`
+  return `${diffHour}h前`
 }
 
 // 格式化持续时长
@@ -80,7 +74,7 @@ const displayItems = computed(() => {
     let list = radar.historicalDestinations || []
     if (query) {
       list = list.filter((h) => {
-        const dest = `${h.dst_ip}:${h.dst_port}`.toLowerCase()
+        const dest = `${compressIP(h.dst_ip)}:${h.dst_port}`.toLowerCase()
         const geo = `${formatCountry(h.country)} ${h.city || ''} ${h.isp || ''}`.toLowerCase()
         const proto = (h.protocol || '').toLowerCase()
         return dest.includes(query) || geo.includes(query) || proto.includes(query)
@@ -125,8 +119,8 @@ const displayItems = computed(() => {
 
   if (query) {
     conns = conns.filter((c) => {
-      const src = `${c.src_ip}:${c.src_port || ''} ${getDeviceName(c.src_ip, c.node_id)}`.toLowerCase()
-      const dst = `${c.dst_ip}:${c.dst_port}`.toLowerCase()
+      const src = `${compressIP(c.src_ip)}:${c.src_port || ''} ${getDeviceName(c.src_ip, c.node_id)}`.toLowerCase()
+      const dst = `${compressIP(c.dst_ip)}:${c.dst_port}`.toLowerCase()
       const geo = `${formatCountry(c.country)} ${c.city || ''} ${c.isp || ''}`.toLowerCase()
       const proto = c.protocol.toLowerCase()
       const node = getNodeName(c.node_id).toLowerCase()
@@ -168,95 +162,88 @@ const displayItems = computed(() => {
 </script>
 
 <template>
-  <div class="apple-glass rounded-3xl p-4 sm:p-5 flex flex-col h-[380px] sm:h-[440px] lg:h-[500px] xl:h-[540px]">
-    <!-- Header Controls: Title & Status -->
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-3 border-b border-slate-200/50 dark:border-slate-800/50 pb-3">
-      <!-- Left: Title & Mode Badge -->
-      <div class="flex items-center gap-2">
-        <div class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-          <Terminal class="w-4 h-4 text-emerald-500" />
-        </div>
-        <div>
-          <h3 class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+  <div class="apple-glass rounded-3xl p-3.5 sm:p-5 flex flex-col h-[520px] sm:h-[600px] lg:h-[680px] xl:h-[720px]">
+    <!-- Header Controls: Title & Filters -->
+    <div class="flex flex-col gap-2.5 mb-3 border-b border-slate-200/50 dark:border-slate-800/50 pb-3">
+      <!-- Top Row: Title + Status/Sort Capsules -->
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <div class="flex items-center gap-2">
+          <div class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+            <Terminal class="w-4 h-4 text-emerald-500" />
+          </div>
+          <h3 class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
             <span>外联态势审计流水</span>
-            <span
-              class="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium border"
-              :class="radar.selectedTimeRange === 'realtime'
-                ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40'
-                : 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 border-amber-200 dark:border-amber-800/40'"
-            >
-              {{ radar.selectedTimeRange === 'realtime' ? '长连接自动合并' : '历史审计归档' }}
-            </span>
+            <span class="text-[11px] font-mono text-slate-400 font-normal">({{ displayItems.length }})</span>
           </h3>
+        </div>
+
+        <!-- Status and Sort Pills in clean row -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <!-- Realtime Status Pill Filter -->
+          <div v-if="radar.selectedTimeRange === 'realtime'" class="flex items-center p-0.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-[11px]">
+            <button
+              @click="statusFilter = 'all'"
+              class="px-2 py-0.5 rounded-lg transition-all"
+              :class="statusFilter === 'all' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-2xs font-medium' : 'text-slate-500'"
+            >
+              全部
+            </button>
+            <button
+              @click="statusFilter = 'active'"
+              class="px-2 py-0.5 rounded-lg transition-all"
+              :class="statusFilter === 'active' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-2xs font-medium' : 'text-slate-500'"
+            >
+              活跃
+            </button>
+            <button
+              @click="statusFilter = 'closed'"
+              class="px-2 py-0.5 rounded-lg transition-all"
+              :class="statusFilter === 'closed' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-2xs font-medium' : 'text-slate-500'"
+            >
+              关闭
+            </button>
+          </div>
+
+          <!-- Sort Switcher -->
+          <div class="flex items-center p-0.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-[11px]">
+            <button
+              @click="sortBy = 'traffic'"
+              class="px-2 py-0.5 rounded-lg transition-all"
+              :class="sortBy === 'traffic' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-2xs font-medium' : 'text-slate-500'"
+              title="按累计总流量降序"
+            >
+              流量
+            </button>
+            <button
+              v-if="radar.selectedTimeRange === 'realtime'"
+              @click="sortBy = 'speed'"
+              class="px-2 py-0.5 rounded-lg transition-all"
+              :class="sortBy === 'speed' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-2xs font-medium' : 'text-slate-500'"
+              title="按当前实时速率降序"
+            >
+              速度
+            </button>
+            <button
+              @click="sortBy = 'time'"
+              class="px-2 py-0.5 rounded-lg transition-all"
+              :class="sortBy === 'time' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-2xs font-medium' : 'text-slate-500'"
+              title="按最近活跃时间排序"
+            >
+              时间
+            </button>
+          </div>
         </div>
       </div>
 
-      <!-- Right: Search Box, Sort & Filter Switchers -->
-      <div class="flex items-center flex-wrap gap-2 text-xs">
-        <!-- Search Input -->
-        <div class="relative flex items-center">
-          <Search class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 pointer-events-none" />
-          <input
-            v-model="searchQuery"
-            type="text"
-            class="pl-8 pr-2.5 py-1 rounded-xl bg-white/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500 w-32 sm:w-44 transition-all"
-            placeholder="搜索 IP / 端口 / 归属地 / 协议..."
-          />
-        </div>
-
-        <!-- Realtime Status Pill Filter -->
-        <div v-if="radar.selectedTimeRange === 'realtime'" class="flex items-center p-0.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-[11px]">
-          <button
-            @click="statusFilter = 'all'"
-            class="px-2 py-0.5 rounded-lg transition-all"
-            :class="statusFilter === 'all' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-2xs font-medium' : 'text-slate-500'"
-          >
-            全部
-          </button>
-          <button
-            @click="statusFilter = 'active'"
-            class="px-2 py-0.5 rounded-lg transition-all"
-            :class="statusFilter === 'active' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-2xs font-medium' : 'text-slate-500'"
-          >
-            活跃
-          </button>
-          <button
-            @click="statusFilter = 'closed'"
-            class="px-2 py-0.5 rounded-lg transition-all"
-            :class="statusFilter === 'closed' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-2xs font-medium' : 'text-slate-500'"
-          >
-            关闭
-          </button>
-        </div>
-
-        <!-- Sort Switcher -->
-        <div class="flex items-center p-0.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-[11px]">
-          <button
-            @click="sortBy = 'traffic'"
-            class="px-2 py-0.5 rounded-lg transition-all"
-            :class="sortBy === 'traffic' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-2xs font-medium' : 'text-slate-500'"
-            title="按累计总流量降序"
-          >
-            流量
-          </button>
-          <button
-            v-if="radar.selectedTimeRange === 'realtime'"
-            @click="sortBy = 'speed'"
-            class="px-2 py-0.5 rounded-lg transition-all"
-            :class="sortBy === 'speed' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-2xs font-medium' : 'text-slate-500'"
-            title="按当前实时速率降序"
-          >
-            速度
-          </button>
-          <button
-            @click="sortBy = 'time'"
-            class="px-2 py-0.5 rounded-lg transition-all"
-            :class="sortBy === 'time' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-2xs font-medium' : 'text-slate-500'"
-            title="按最近活跃时间排序"
-          >
-            时间
-          </button>
-        </div>
+      <!-- Search Box Row (Full Width on mobile, expands cleanly) -->
+      <div class="relative w-full">
+        <Search class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-all font-mono"
+          placeholder="搜索 IP / 端口 / 归属地 / 终端名称 / 协议..."
+        />
       </div>
     </div>
 
@@ -265,53 +252,49 @@ const displayItems = computed(() => {
       <div
         v-for="item in displayItems"
         :key="item.id"
-        class="p-2.5 sm:p-3 rounded-2xl bg-white/60 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50 hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all font-mono shadow-2xs"
+        class="p-2.5 sm:p-3 rounded-2xl bg-white/60 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50 hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all font-mono shadow-2xs space-y-1.5"
       >
-        <!-- Top Row: Protocol + Source ➔ Target -->
-        <div class="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
-          <!-- Left: Protocol Badge + Dual IP Endpoint -->
-          <div class="flex items-center gap-2 min-w-0 flex-1">
+        <!-- Top Row: Protocol + Source ➔ Target + Status & Time -->
+        <div class="flex items-start justify-between gap-2">
+          <!-- Left: Protocol Badge + Dual Endpoints Flow -->
+          <div class="flex items-center gap-1.5 min-w-0 flex-1 flex-wrap sm:flex-nowrap">
             <span
-              class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider border flex-shrink-0"
+              class="px-1.5 py-0.5 rounded-md text-[10px] font-bold tracking-wider border flex-shrink-0"
               :class="getProtocolBadgeClass(item.protocol)"
             >
               {{ item.protocol }}
             </span>
 
-            <!-- Dual Endpoints Flow: [Source] ➔ [Destination] -->
-            <div class="flex items-center gap-1.5 min-w-0 text-xs flex-wrap">
-              <!-- Source Endpoint -->
-              <div class="flex items-center gap-1 text-slate-700 dark:text-slate-300 truncate max-w-[200px] sm:max-w-[240px]">
-                <span class="font-medium truncate text-slate-900 dark:text-white">
-                  {{ item.devName || item.src_ip || '本机/网关' }}
-                </span>
-                <span v-if="item.src_port" class="text-slate-400 text-[11px]">
-                  :{{ item.src_port }}
-                </span>
-                <span v-if="item.nodeName" class="text-[10px] px-1.5 py-0.2 rounded bg-slate-200/60 dark:bg-slate-700 text-slate-500 dark:text-slate-400 truncate">
-                  {{ item.nodeName }}
-                </span>
-              </div>
+            <!-- Source Device / IP -->
+            <div class="flex items-center gap-1 min-w-0 text-xs text-slate-700 dark:text-slate-300">
+              <span class="font-medium truncate max-w-[130px] sm:max-w-[180px] text-slate-900 dark:text-white" :title="item.devName || item.src_ip">
+                {{ item.devName || compressIP(item.src_ip) || '本机/网关' }}
+              </span>
+              <span v-if="item.src_port" class="text-slate-400 text-[10px] flex-shrink-0">
+                :{{ item.src_port }}
+              </span>
+              <span v-if="item.nodeName" class="text-[9px] px-1 py-0.2 rounded bg-slate-200/60 dark:bg-slate-700 text-slate-500 dark:text-slate-400 truncate hidden sm:inline flex-shrink-0">
+                {{ item.nodeName }}
+              </span>
+            </div>
 
-              <!-- Flow Arrow -->
-              <ArrowRight class="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+            <!-- Flow Arrow -->
+            <ArrowRight class="w-3 h-3 text-emerald-500 flex-shrink-0 mx-0.5" />
 
-              <!-- Destination Endpoint -->
-              <div class="flex items-center gap-1 text-slate-800 dark:text-slate-100 font-semibold truncate max-w-[220px] sm:max-w-[280px]">
-                <span class="truncate">{{ item.dst_ip }}:{{ item.dst_port }}</span>
-                <span class="text-[11px] font-normal text-slate-400 dark:text-slate-500 truncate hidden sm:inline">
-                  ({{ formatCountry(item.country) }}{{ item.city ? ' · ' + item.city : '' }})
-                </span>
-              </div>
+            <!-- Destination Endpoint -->
+            <div class="flex items-center gap-1 min-w-0 text-xs text-slate-800 dark:text-slate-100 font-semibold">
+              <span class="truncate max-w-[150px] sm:max-w-[220px]" :title="`${compressIP(item.dst_ip)}:${item.dst_port}`">
+                {{ compressIP(item.dst_ip) }}:{{ item.dst_port }}
+              </span>
             </div>
           </div>
 
-          <!-- Right: Connection Status & Active Time -->
-          <div class="flex items-center gap-2 text-[11px] text-slate-400 flex-shrink-0">
+          <!-- Right: Active Status & Time -->
+          <div class="flex items-center gap-1.5 text-[10px] text-slate-400 flex-shrink-0 pt-0.5">
             <span v-if="item.duration" class="hidden md:inline text-slate-400">
-              持续 {{ item.duration }}
+              {{ item.duration }}
             </span>
-            <span class="flex items-center gap-1">
+            <span class="flex items-center gap-1 whitespace-nowrap">
               <span
                 class="w-1.5 h-1.5 rounded-full"
                 :class="item.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'"
@@ -321,40 +304,34 @@ const displayItems = computed(() => {
           </div>
         </div>
 
-        <!-- Bottom Row: Speeds, Cumulative Bytes & Geo Details -->
-        <div class="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100/60 dark:border-slate-700/40 text-slate-500 dark:text-slate-400 flex-wrap gap-2">
+        <!-- Bottom Row: Geo & ISP (Left) | Speeds & Cumulative Traffic (Right) -->
+        <div class="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100/60 dark:border-slate-700/40 text-slate-500 dark:text-slate-400 gap-2">
           <!-- Geo & ISP Info -->
-          <div class="truncate max-w-[240px] sm:max-w-xs text-slate-400 text-[11px]">
+          <div class="truncate text-slate-400 text-[10px] sm:text-[11px] min-w-0 flex-1">
             <span>{{ formatCountry(item.country) }}</span>
             <span v-if="item.city"> · {{ item.city }}</span>
-            <span v-if="item.isp"> ({{ item.isp }})</span>
+            <span v-if="item.isp" class="hidden sm:inline"> ({{ item.isp }})</span>
           </div>
 
           <!-- Speeds & Total Traffic Stats (Clash Layout) -->
-          <div class="flex items-center gap-3 ml-auto text-[11px]">
+          <div class="flex items-center gap-2.5 flex-shrink-0 font-mono text-[10px] sm:text-[11px]">
             <!-- Live Speed (only in realtime) -->
-            <div v-if="!item.isHistorical && (item.speed_in > 0 || item.speed_out > 0)" class="flex items-center gap-2">
-              <span class="text-emerald-600 dark:text-emerald-400 font-medium flex items-center">
-                <ArrowDown class="w-3 h-3 mr-0.5" />
+            <div v-if="!item.isHistorical && (item.speed_in > 0 || item.speed_out > 0)" class="flex items-center gap-1.5">
+              <span class="text-emerald-600 dark:text-emerald-400 font-medium flex items-center whitespace-nowrap">
+                <ArrowDown class="w-2.5 h-2.5 mr-0.5" />
                 {{ formatSpeed(item.speed_in) }}
               </span>
-              <span class="text-sky-600 dark:text-sky-400 font-medium flex items-center">
-                <ArrowUp class="w-3 h-3 mr-0.5" />
+              <span class="text-sky-600 dark:text-sky-400 font-medium flex items-center whitespace-nowrap">
+                <ArrowUp class="w-2.5 h-2.5 mr-0.5" />
                 {{ formatSpeed(item.speed_out) }}
               </span>
             </div>
 
             <!-- Total Accumulated Traffic -->
-            <div class="flex items-center gap-2 text-slate-600 dark:text-slate-300 font-medium">
-              <span class="flex items-center" title="累计下行流量">
-                <span class="text-slate-400 text-[10px] mr-1">下行</span>
-                {{ formatBytes(item.total_in) }}
-              </span>
+            <div class="flex items-center gap-1 text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">
+              <span title="下行流量">↓{{ formatBytes(item.total_in) }}</span>
               <span class="text-slate-300 dark:text-slate-600">/</span>
-              <span class="flex items-center" title="累计上行流量">
-                <span class="text-slate-400 text-[10px] mr-1">上行</span>
-                {{ formatBytes(item.total_out) }}
-              </span>
+              <span title="上行流量">↑{{ formatBytes(item.total_out) }}</span>
             </div>
           </div>
         </div>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRadarStore } from '../stores/radarStore'
-import { formatSpeed } from '../utils/format'
+import { formatSpeed, compressIP } from '../utils/format'
 import {
   Smartphone,
   Laptop,
@@ -103,23 +103,25 @@ const toggleSelectDevice = (ip: string) => {
             </div>
 
             <div class="min-w-0 flex-1">
-              <div v-if="editingIp === dev.ip" class="flex items-center gap-1.5" @click.stop>
+              <div v-if="editingIp === dev.ip" class="flex items-center gap-1.5 flex-1 min-w-0" @click.stop>
                 <input
                   v-model="editNameInput"
                   type="text"
-                  class="w-28 px-1.5 py-0.5 text-xs rounded-md bg-white dark:bg-slate-900 border border-emerald-500 focus:outline-none"
+                  class="flex-1 min-w-[120px] px-2 py-1 text-xs rounded-xl bg-white dark:bg-slate-900 border border-emerald-500 focus:outline-none font-mono"
                   autofocus
                   @keydown.enter="saveRename(dev.ip, $event)"
                 />
                 <button
                   @click="saveRename(dev.ip, $event)"
-                  class="p-1 rounded text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+                  class="p-1.5 rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-colors flex-shrink-0"
+                  title="确认保存"
                 >
                   <Check class="w-3.5 h-3.5" />
                 </button>
                 <button
                   @click="cancelRename($event)"
-                  class="p-1 rounded text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors flex-shrink-0"
+                  title="取消"
                 >
                   <X class="w-3.5 h-3.5" />
                 </button>
@@ -139,7 +141,7 @@ const toggleSelectDevice = (ip: string) => {
                   v-if="dev.is_custom && dev.name !== dev.ip"
                   class="text-[10px] text-slate-400 font-mono truncate hidden sm:inline"
                 >
-                  ({{ dev.ip }})
+                  ({{ compressIP(dev.ip) }})
                 </span>
                 <button
                   @click="startRename(dev.ip, dev.name, $event)"
@@ -152,7 +154,7 @@ const toggleSelectDevice = (ip: string) => {
             </div>
           </div>
 
-          <div class="flex items-center gap-1.5 text-xs font-mono flex-shrink-0">
+          <div v-if="editingIp !== dev.ip" class="flex items-center gap-1.5 text-xs font-mono flex-shrink-0">
             <span class="flex items-center text-emerald-600 dark:text-emerald-400 font-semibold whitespace-nowrap">
               <ArrowDown class="w-2.5 h-2.5 mr-0.5" />
               {{ formatSpeed(dev.rate_in_bps) }}
