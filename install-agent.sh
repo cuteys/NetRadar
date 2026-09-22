@@ -427,6 +427,7 @@ AGENT_CONFIG="${INSTALL_DIR}/config.yaml"
 
 cat << EOF > "$RUNNER_SCRIPT"
 #!/bin/sh
+sysctl -w net.netfilter.nf_conntrack_acct=1 >/dev/null 2>&1 || true
 if ! ps -w 2>/dev/null | grep -v grep | grep -q "${AGENT_BIN}"; then
     chmod +x "${AGENT_BIN}" 2>/dev/null || true
     ${AGENT_BIN} -c "${AGENT_CONFIG}" -server "${WS_URL}" -token "${AGENT_TOKEN}" >/tmp/netradar-agent.log 2>&1 &

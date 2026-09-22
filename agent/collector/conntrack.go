@@ -32,7 +32,19 @@ var ConntrackPaths = []string{
 	"/proc/net/ip_conntrack",
 }
 
+const ConntrackAcctPath = "/proc/sys/net/netfilter/nf_conntrack_acct"
+
+func EnsureConntrackAcct() {
+	if _, err := os.Stat(ConntrackAcctPath); err == nil {
+		data, err := os.ReadFile(ConntrackAcctPath)
+		if err == nil && strings.TrimSpace(string(data)) != "1" {
+			_ = os.WriteFile(ConntrackAcctPath, []byte("1\n"), 0644)
+		}
+	}
+}
+
 func CheckConntrackAvailable() (string, bool) {
+	EnsureConntrackAcct()
 	for _, p := range ConntrackPaths {
 		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
 			return p, true
