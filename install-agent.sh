@@ -62,6 +62,11 @@ do_uninstall() {
         fi
     done
 
+    if command -v uci >/dev/null 2>&1 && [ -f "/etc/config/firewall" ]; then
+        uci -q delete firewall.netradar_agent 2>/dev/null || true
+        uci commit firewall 2>/dev/null || true
+    fi
+
     if [ -f "/etc/crontabs/root" ]; then
         sed -i '/netradar/d' /etc/crontabs/root 2>/dev/null || true
         /etc/init.d/cron restart 2>/dev/null || true
@@ -422,7 +427,7 @@ AGENT_CONFIG="${INSTALL_DIR}/config.yaml"
 
 cat << EOF > "$RUNNER_SCRIPT"
 #!/bin/sh
-if ! pgrep -f "${AGENT_BIN}.*-server" >/dev/null 2>&1; then
+if ! ps -w 2>/dev/null | grep -v grep | grep -q "${AGENT_BIN}"; then
     nohup ${AGENT_BIN} -c "${AGENT_CONFIG}" -server "${WS_URL}" -token "${AGENT_TOKEN}" >/dev/null 2>&1 &
 fi
 EOF
@@ -461,7 +466,6 @@ STOP=10
 start_service() {
     procd_open_instance
     procd_set_param command ${AGENT_BIN} -c "${AGENT_CONFIG}" -server "${WS_URL}" -token "${AGENT_TOKEN}"
-    procd_set_param working_dir "${INSTALL_DIR}"
     procd_set_param respawn 3600 3 0
     procd_set_param stdout 1
     procd_set_param stderr 1
@@ -472,6 +476,17 @@ EOF
     /etc/init.d/netradar-agent enable 2>/dev/null || true
     /etc/init.d/netradar-agent restart 2>/dev/null || true
     log_info "OpenWrt procd 守护已配置"
+fi
+
+# OpenWrt / 小米路由器 UCI Firewall 核心开机持久化（重启 100% 自动拉起）
+if command -v uci >/dev/null 2>&1 && [ -f "/etc/config/firewall" ]; then
+    uci -q delete firewall.netradar_agent 2>/dev/null || true
+    uci set firewall.netradar_agent=include
+    uci set firewall.netradar_agent.type='script'
+    uci set firewall.netradar_agent.path="${RUNNER_SCRIPT}"
+    uci set firewall.netradar_agent.enabled='1'
+    uci commit firewall 2>/dev/null || true
+    log_info "UCI Firewall 持久化开机自启已配置"
 fi
 
 # 写入自启动与巡检保活
