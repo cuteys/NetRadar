@@ -445,7 +445,7 @@ echo 1 > /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null || true
 sysctl -w net.netfilter.nf_conntrack_acct=1 >/dev/null 2>&1 || true
 if ! ps -w 2>/dev/null | grep -v grep | grep -q "${AGENT_BIN}"; then
     chmod +x "${AGENT_BIN}" 2>/dev/null || true
-    ${AGENT_BIN} -c "${AGENT_CONFIG}" -server "${WS_URL}" -token "${AGENT_TOKEN}" -node-name "${NODE_NAME}" >/tmp/netradar-agent.log 2>&1 &
+    ${AGENT_BIN} -c "${AGENT_CONFIG}" -server "${WS_URL}" -token "${AGENT_TOKEN}" >/tmp/netradar-agent.log 2>&1 &
 fi
 EOF
 chmod +x "$RUNNER_SCRIPT"
@@ -460,7 +460,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=${INSTALL_DIR}
-ExecStart=${AGENT_BIN} -c "${AGENT_CONFIG}" -server "${WS_URL}" -token "${AGENT_TOKEN}" -node-name "${NODE_NAME}"
+ExecStart=${AGENT_BIN} -c "${AGENT_CONFIG}" -server "${WS_URL}" -token "${AGENT_TOKEN}"
 Restart=always
 RestartSec=3s
 LimitNOFILE=65535
@@ -482,7 +482,7 @@ STOP=10
 
 start_service() {
     procd_open_instance
-    procd_set_param command ${AGENT_BIN} -c "${AGENT_CONFIG}" -server "${WS_URL}" -token "${AGENT_TOKEN}" -node-name "${NODE_NAME}"
+    procd_set_param command ${AGENT_BIN} -c "${AGENT_CONFIG}" -server "${WS_URL}" -token "${AGENT_TOKEN}"
     procd_set_param respawn 3600 3 0
     procd_set_param stdout 1
     procd_set_param stderr 1

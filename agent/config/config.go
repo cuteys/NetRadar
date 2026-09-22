@@ -20,6 +20,7 @@ type AgentConfig struct {
 	ServerURL  string
 	Token      string
 	NodeID     string
+	NodeName   string
 	Version    string
 	Interval   int
 	Mock       bool
@@ -152,6 +153,8 @@ func LoadConfig() *AgentConfig {
 	flag.StringVar(&cfg.ServerURL, "server", "", "")
 	flag.StringVar(&cfg.Token, "token", "", "")
 	flag.StringVar(&cfg.NodeID, "node-id", "", "")
+	flag.StringVar(&cfg.NodeName, "node-name", "", "")
+	flag.StringVar(&cfg.NodeName, "name", "", "")
 	flag.IntVar(&cfg.Interval, "interval", 0, "")
 	flag.BoolVar(&cfg.Mock, "mock", false, "")
 
@@ -170,6 +173,9 @@ func LoadConfig() *AgentConfig {
 	}
 	if cfg.NodeID == "" {
 		cfg.NodeID = utils.GetEnv("NETRADAR_NODE_ID", getStableHardwareUUID())
+	}
+	if cfg.NodeName == "" {
+		cfg.NodeName = utils.GetEnv("NETRADAR_NODE_NAME", "")
 	}
 	if cfg.Interval <= 0 {
 		envInterval, _ := strconv.Atoi(os.Getenv("NETRADAR_INTERVAL"))
@@ -212,6 +218,10 @@ func parseSimpleYAML(content string, cfg *AgentConfig) {
 			if cfg.NodeID == "" {
 				cfg.NodeID = v
 			}
+		case "name", "node_name":
+			if cfg.NodeName == "" {
+				cfg.NodeName = v
+			}
 		case "interval":
 			if cfg.Interval == 0 {
 				if iv, err := strconv.Atoi(v); err == nil && iv > 0 {
@@ -226,8 +236,9 @@ func saveStandardYAML(path string, cfg *AgentConfig) {
 	content := fmt.Sprintf(`server: "%s"
 token: "%s"
 uuid: "%s"
+name: "%s"
 interval: %d
-`, cfg.ServerURL, cfg.Token, cfg.NodeID, cfg.Interval)
+`, cfg.ServerURL, cfg.Token, cfg.NodeID, cfg.NodeName, cfg.Interval)
 
 	// 内容一致则跳过写入，避免闪存介质频繁擦写
 	if existing, err := os.ReadFile(path); err == nil {
