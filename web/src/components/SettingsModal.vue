@@ -51,11 +51,23 @@ const handleClearCache = async () => {
   }
 }
 
+const compareSemVer = (a: string, b: string): number => {
+  const pa = a.split('.').map((x) => parseInt(x, 10) || 0)
+  const pb = b.split('.').map((x) => parseInt(x, 10) || 0)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0
+    const nb = pb[i] || 0
+    if (na > nb) return 1
+    if (na < nb) return -1
+  }
+  return 0
+}
+
 const hasNewVersion = computed(() => {
   const current = (radar.systemSettings?.version || '').replace(/^v/, '')
   const latest = (radar.systemSettings?.latest_version || '').replace(/^v/, '')
   if (!current || !latest || current === latest) return false
-  return latest > current
+  return compareSemVer(latest, current) > 0
 })
 
 const syncForm = () => {

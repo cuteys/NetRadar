@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -38,6 +39,7 @@ func NewRouter(authSvc *auth.AuthService, handler *APIHandler, hub *ws.Hub, stat
 	mux.HandleFunc("/api/stats/summary", authSvc.RequireAuth(handler.HandleGetSummary))
 	mux.HandleFunc("/api/destinations", authSvc.RequireAuth(handler.HandleGetDestinations))
 	mux.HandleFunc("/api/stats/history", authSvc.RequireAuth(handler.HandleGetHistory))
+	mux.HandleFunc("/api/history", authSvc.RequireAuth(handler.HandleGetHistory)) // 兼容历史别名，杜绝 404
 	mux.HandleFunc("/api/stats/aggregated", authSvc.RequireAuth(handler.HandleGetAggregatedStats))
 	mux.HandleFunc("/api/device/rename", authSvc.RequireAuth(handler.HandleRenameDevice))
 	mux.HandleFunc("/api/settings/system", authSvc.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +111,7 @@ func NewRouter(authSvc *auth.AuthService, handler *APIHandler, hub *ws.Hub, stat
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin != "" {
+		if origin != "" && isAllowedOrigin(origin, r.Host) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -123,4 +125,26 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isAllowedOrigin(origin, host string) bool {
+	if origin == "" {
+		return false
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	// 允许同主机访问或本地开发端口 (如 Vite: 5173)
+	if strings.EqualFold(u.Host, host) || strings.HasPrefix(u.Host, "localhost:") || strings.HasPrefix(u.Host, "127.0.0.1:") || u.Host == "localhost" || u.Host == "127.0.0.1" {
+		return true
+	}
+	if allowed := os.Getenv("NETRADAR_ALLOWED_ORIGINS"); allowed != "" {
+		for _, o := range strings.Split(allowed, ",") {
+			if strings.TrimSpace(o) == origin || strings.TrimSpace(o) == "*" {
+				return true
+			}
+		}
+	}
+	return false
 }

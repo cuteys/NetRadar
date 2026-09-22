@@ -16,19 +16,18 @@ type FlowState struct {
 type DeltaTracker struct {
 	mu           sync.Mutex
 	flows        map[string]*FlowState
-	deviceTotals map[string]*model.DeviceStats
 	lastTickTime time.Time
 }
 
 func NewDeltaTracker() *DeltaTracker {
 	return &DeltaTracker{
 		flows:        make(map[string]*FlowState),
-		deviceTotals: make(map[string]*model.DeviceStats),
 		lastTickTime: time.Now(),
 	}
 }
 
-func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackEntry) (*model.NodeMetricsPayload, []*model.DeviceStats) {
+// ProcessConntrack 计算增量流指标，直接生成上报载荷
+func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackEntry) *model.NodeMetricsPayload {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
@@ -39,16 +38,11 @@ func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackE
 	}
 	dt.lastTickTime = now
 
-	var activeFlows []*model.FlowRecord
+	activeFlows := make([]*model.FlowRecord, 0, 32)
 	var totalDeltaIn int64
 	var totalDeltaOut int64
 
-	for _, dev := range dt.deviceTotals {
-		dev.RateInBps = 0
-		dev.RateOutBps = 0
-	}
-
-	seenKeys := make(map[string]bool)
+	seenKeys := make(map[string]bool, len(entries))
 
 	for _, e := range entries {
 		srcIsPrivate := IsPrivateIP(e.Src1)
@@ -108,7 +102,7 @@ func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackE
 			deltaOut = 0
 		}
 
-		// 若之前记录为 0 且当前值较大（如刚开启内核流量统计的已有长连接），重新对齐基线，避免产生假峰值
+		// 针对刚开启统计的长连接基线校准
 		if (state.LastBytesIn == 0 && bytesIn > 2*1024*1024) || (state.LastBytesOut == 0 && bytesOut > 2*1024*1024) {
 			state.LastBytesIn = bytesIn
 			state.LastBytesOut = bytesOut
@@ -139,37 +133,14 @@ func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackE
 				State:     e.State,
 			}
 			activeFlows = append(activeFlows, flowRecord)
-
-			if lanIP != "" {
-				dev, ok := dt.deviceTotals[lanIP]
-				if !ok {
-					dev = &model.DeviceStats{
-						IP:         lanIP,
-						Name:       GuessDeviceName(lanIP),
-						Category:   GuessDeviceCategory(lanIP),
-						LastActive: now.Unix(),
-					}
-					dt.deviceTotals[lanIP] = dev
-				}
-				dev.TotalIn += deltaIn
-				dev.TotalOut += deltaOut
-				dev.RateInBps += float64(deltaIn) / elapsed
-				dev.RateOutBps += float64(deltaOut) / elapsed
-				dev.LastActive = now.Unix()
-				dev.ConnCount++
-			}
 		}
 	}
 
+	// 清理超过 60 秒无活跃的连接状态
 	for k, v := range dt.flows {
 		if !seenKeys[k] && now.Sub(v.LastSeen) > 60*time.Second {
 			delete(dt.flows, k)
 		}
-	}
-
-	var devList []*model.DeviceStats
-	for _, dev := range dt.deviceTotals {
-		devList = append(devList, dev)
 	}
 
 	payload := &model.NodeMetricsPayload{
@@ -184,5 +155,5 @@ func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackE
 		ActiveConns:   len(entries),
 	}
 
-	return payload, devList
+	return payload
 }

@@ -15,7 +15,7 @@ import (
 
 type Database struct {
 	db         *sql.DB
-	mu         sync.Mutex
+	mu         sync.RWMutex
 	aliasCache sync.Map
 	stopClean  chan struct{}
 }
@@ -118,17 +118,18 @@ func (d *Database) migrate() error {
 		_, _ = d.db.Exec(`ALTER TABLE admin_credentials ADD COLUMN use_tls INTEGER DEFAULT 0`)
 		_, _ = d.db.Exec(`ALTER TABLE admin_credentials ADD COLUMN jwt_secret TEXT DEFAULT ''`)
 		_, _ = d.db.Exec(`ALTER TABLE nodes ADD COLUMN custom_location INTEGER DEFAULT 0`)
+		_, _ = d.db.Exec(`ALTER TABLE nodes ADD COLUMN cpu_usage REAL DEFAULT 0`)
+		_, _ = d.db.Exec(`ALTER TABLE nodes ADD COLUMN mem_usage REAL DEFAULT 0`)
+		_, _ = d.db.Exec(`ALTER TABLE nodes ADD COLUMN uptime INTEGER DEFAULT 0`)
 	}
 	return err
 }
 
-// 启动数据保留策略定时清理器（默认保留 retentionDays 天流量历史，30 天外联历史）
 func (d *Database) startRetentionCleaner(retentionDays int) {
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 
-		// 启动后先执行一次清理
 		time.Sleep(10 * time.Second)
 		d.CleanExpiredHistory(retentionDays)
 
@@ -143,7 +144,6 @@ func (d *Database) startRetentionCleaner(retentionDays int) {
 	}()
 }
 
-// CleanExpiredHistory 清理过期历史数据并释放空间
 func (d *Database) CleanExpiredHistory(retentionDays int) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -165,8 +165,8 @@ func (d *Database) CleanExpiredHistory(retentionDays int) {
 }
 
 func (d *Database) loadAliasesToCache() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 
 	rows, err := d.db.Query(`SELECT ip, custom_name FROM device_aliases`)
 	if err != nil {
@@ -183,8 +183,8 @@ func (d *Database) loadAliasesToCache() {
 }
 
 func (d *Database) GetAdminCredentials() (username, pwdHash, token, port, agentServerAddr string, useTLS bool, jwtSecret string, err error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 
 	var tlsInt int
 	row := d.db.QueryRow(`SELECT username, password_hash, agent_token, listen_port, COALESCE(agent_server_addr, ''), COALESCE(use_tls, 0), COALESCE(jwt_secret, '') FROM admin_credentials WHERE id = 1`)
@@ -229,8 +229,8 @@ func (d *Database) UpsertNode(node *model.NodeInfo) error {
 	}
 
 	query := `
-	INSERT INTO nodes (id, name, hostname, os, arch, ip, version, first_seen, last_seen, gateway_lat, gateway_lng, custom_location)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO nodes (id, name, hostname, os, arch, ip, version, first_seen, last_seen, gateway_lat, gateway_lng, custom_location, cpu_usage, mem_usage, uptime)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(id) DO UPDATE SET
 		name=CASE WHEN nodes.name != '' THEN nodes.name WHEN excluded.name != '' THEN excluded.name ELSE nodes.name END,
 		hostname=excluded.hostname,
@@ -239,11 +239,15 @@ func (d *Database) UpsertNode(node *model.NodeInfo) error {
 		ip=CASE WHEN nodes.custom_location = 1 THEN nodes.ip WHEN excluded.ip != '' THEN excluded.ip ELSE nodes.ip END,
 		gateway_lat=CASE WHEN nodes.custom_location = 1 THEN nodes.gateway_lat WHEN excluded.gateway_lat != 0 THEN excluded.gateway_lat ELSE nodes.gateway_lat END,
 		gateway_lng=CASE WHEN nodes.custom_location = 1 THEN nodes.gateway_lng WHEN excluded.gateway_lng != 0 THEN excluded.gateway_lng ELSE nodes.gateway_lng END,
-		last_seen=excluded.last_seen;
+		last_seen=excluded.last_seen,
+		cpu_usage=excluded.cpu_usage,
+		mem_usage=excluded.mem_usage,
+		uptime=excluded.uptime;
 	`
 	_, err := d.db.Exec(query,
 		node.ID, node.Name, node.Hostname, node.OS, node.Arch, node.IP, node.Version,
 		time.Now(), node.LastSeen, node.GatewayLat, node.GatewayLng, customLoc,
+		node.CPUUsage, node.MemUsage, node.Uptime,
 	)
 	return err
 }
@@ -294,7 +298,6 @@ func (d *Database) SetDeviceAlias(ip, customName string) error {
 	return err
 }
 
-// GetDeviceAliasDirect 从内存缓存直接读取别名，免去数据库读 IO
 func (d *Database) GetDeviceAliasDirect(ip string) (string, bool) {
 	val, ok := d.aliasCache.Load(ip)
 	if !ok {
@@ -313,10 +316,10 @@ func (d *Database) GetDeviceAliases() (map[string]string, error) {
 }
 
 func (d *Database) GetNodes() ([]*model.NodeInfo, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 
-	rows, err := d.db.Query(`SELECT id, name, hostname, os, arch, ip, version, last_seen, gateway_lat, gateway_lng, COALESCE(custom_location, 0) FROM nodes`)
+	rows, err := d.db.Query(`SELECT id, name, hostname, os, arch, ip, version, last_seen, gateway_lat, gateway_lng, COALESCE(custom_location, 0), COALESCE(cpu_usage, 0), COALESCE(mem_usage, 0), COALESCE(uptime, 0) FROM nodes`)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +332,7 @@ func (d *Database) GetNodes() ([]*model.NodeInfo, error) {
 		var n model.NodeInfo
 		var lastSeen time.Time
 		var customLoc int
-		if err := rows.Scan(&n.ID, &n.Name, &n.Hostname, &n.OS, &n.Arch, &n.IP, &n.Version, &lastSeen, &n.GatewayLat, &n.GatewayLng, &customLoc); err == nil {
+		if err := rows.Scan(&n.ID, &n.Name, &n.Hostname, &n.OS, &n.Arch, &n.IP, &n.Version, &lastSeen, &n.GatewayLat, &n.GatewayLng, &customLoc, &n.CPUUsage, &n.MemUsage, &n.Uptime); err == nil {
 			n.LastSeen = lastSeen
 			n.IsOnline = now.Sub(lastSeen) < 15*time.Second
 			n.CustomLocation = customLoc == 1
@@ -339,12 +342,71 @@ func (d *Database) GetNodes() ([]*model.NodeInfo, error) {
 	return nodes, nil
 }
 
-func (d *Database) GetHistory(nodeID string, sinceTimestamp int64, limit int) ([]map[string]interface{}, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+// GetHistory 查询历史流量。若 bucketSeconds > 0，则执行时间分桶下采样聚合，避免点位过多或被截断
+func (d *Database) GetHistory(nodeID string, sinceTimestamp int64, limit int, bucketSeconds int) ([]map[string]interface{}, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 
 	var query string
 	var args []interface{}
+
+	if bucketSeconds > 0 {
+		// 时间分桶下采样聚合查询
+		if nodeID == "" || nodeID == "all" {
+			query = `
+				SELECT
+					(timestamp / ?) * ? AS bucket_ts,
+					SUM(rate_in) AS r_in,
+					SUM(rate_out) AS r_out,
+					MAX(active_conns) AS conns
+				FROM traffic_history
+				WHERE timestamp >= ?
+				GROUP BY bucket_ts
+				ORDER BY bucket_ts ASC
+			`
+			args = []interface{}{bucketSeconds, bucketSeconds, sinceTimestamp}
+		} else {
+			query = `
+				SELECT
+					(timestamp / ?) * ? AS bucket_ts,
+					AVG(rate_in) AS r_in,
+					AVG(rate_out) AS r_out,
+					MAX(active_conns) AS conns
+				FROM traffic_history
+				WHERE node_id = ? AND timestamp >= ?
+				GROUP BY bucket_ts
+				ORDER BY bucket_ts ASC
+			`
+			args = []interface{}{bucketSeconds, bucketSeconds, nodeID, sinceTimestamp}
+		}
+
+		rows, err := d.db.Query(query, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		var points []map[string]interface{}
+		for rows.Next() {
+			var ts int64
+			var rateIn, rateOut float64
+			var conns int
+			if err := rows.Scan(&ts, &rateIn, &rateOut, &conns); err == nil {
+				points = append(points, map[string]interface{}{
+					"timestamp":    ts,
+					"rate_in_bps":  rateIn,
+					"rate_out_bps": rateOut,
+					"active_conns": conns,
+				})
+			}
+		}
+		return points, nil
+	}
+
+	// 原始短时点位查询
+	if limit <= 0 {
+		limit = 100
+	}
 
 	if nodeID == "" || nodeID == "all" {
 		query = `
@@ -397,8 +459,8 @@ func (d *Database) GetHistory(nodeID string, sinceTimestamp int64, limit int) ([
 }
 
 func (d *Database) GetAggregatedTotals(nodeID string, sinceTimestamp int64) (map[string]interface{}, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 
 	var query string
 	var args []interface{}
@@ -505,8 +567,8 @@ func (d *Database) RecordDestinations(nodeID string, flows []*model.ParticleFlow
 }
 
 func (d *Database) GetHistoricalDestinations(nodeID string, sinceTimestamp int64, limit int) ([]map[string]interface{}, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 
 	if limit <= 0 || limit > 500 {
 		limit = 300

@@ -143,6 +143,10 @@ const toggleMode = (m: 'proto' | 'country') => {
   updateChart()
 }
 
+const handleResize = () => {
+  chart?.resize()
+}
+
 onMounted(() => {
   if (chartContainer.value) {
     chart = echarts.init(chartContainer.value, null, {
@@ -150,11 +154,12 @@ onMounted(() => {
       devicePixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
     })
     updateChart()
-    window.addEventListener('resize', () => chart?.resize())
+    window.addEventListener('resize', handleResize)
   }
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
   if (updateDonutRaf) cancelAnimationFrame(updateDonutRaf)
   chart?.dispose()
   chart = null

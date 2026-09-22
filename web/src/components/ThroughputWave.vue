@@ -168,6 +168,10 @@ const updateData = () => {
   })
 }
 
+const handleResize = () => {
+  chart?.resize()
+}
+
 onMounted(() => {
   if (chartContainer.value) {
     chart = echarts.init(chartContainer.value, null, {
@@ -175,11 +179,12 @@ onMounted(() => {
       devicePixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
     })
     initChart()
-    window.addEventListener('resize', () => chart?.resize())
+    window.addEventListener('resize', handleResize)
   }
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
   if (updateWaveRaf) cancelAnimationFrame(updateWaveRaf)
   chart?.dispose()
   chart = null

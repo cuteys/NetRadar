@@ -25,6 +25,15 @@ watch(() => radar.searchFilter, () => {
 
 const sortBy = ref<'traffic' | 'speed' | 'time'>('traffic')
 const statusFilter = ref<'all' | 'active' | 'closed'>('all')
+const selectedPort = ref<string>('all')
+
+const portChips = [
+  { label: '全部', value: 'all' },
+  { label: '443/HTTPS', value: '443' },
+  { label: '80/HTTP', value: '80' },
+  { label: '53/DNS', value: '53' },
+  { label: '22/SSH', value: '22' },
+]
 
 const getProtocolBadgeClass = (proto: string) => {
   switch (proto?.toUpperCase()) {
@@ -72,6 +81,10 @@ const displayItems = computed(() => {
   // 1. 历史模式
   if (radar.selectedTimeRange !== 'realtime') {
     let list = radar.historicalDestinations || []
+    if (selectedPort.value !== 'all') {
+      const p = Number(selectedPort.value)
+      list = list.filter((h) => h.dst_port === p)
+    }
     if (tokens.length > 0) {
       list = list.filter((h) => {
         const hNodeName = radar.getNodeName(h.node_id)
@@ -90,13 +103,13 @@ const displayItems = computed(() => {
         return matchTokens(text)
       })
     }
-    const copy = [...list]
+    const sorted = [...list]
     if (sortBy.value === 'time') {
-      list.sort((a, b) => (b.last_seen || 0) - (a.last_seen || 0))
+      sorted.sort((a, b) => (b.last_seen || 0) - (a.last_seen || 0))
     } else {
-      list.sort((a, b) => ((b.bytes_in || 0) + (b.bytes_out || 0)) - ((a.bytes_in || 0) + (a.bytes_out || 0)))
+      sorted.sort((a, b) => ((b.bytes_in || 0) + (b.bytes_out || 0)) - ((a.bytes_in || 0) + (a.bytes_out || 0)))
     }
-    return list.map((h, idx) => ({
+    return sorted.map((h, idx) => ({
       isHistorical: true,
       id: `hist_${idx}_${h.dst_ip}_${h.dst_port}_${h.node_id || ''}`,
       protocol: (h.protocol || 'TCP').toUpperCase(),
@@ -125,6 +138,10 @@ const displayItems = computed(() => {
   }
   if (radar.selectedDeviceIp) {
     conns = conns.filter((c) => c.src_ip === radar.selectedDeviceIp)
+  }
+  if (selectedPort.value !== 'all') {
+    const p = Number(selectedPort.value)
+    conns = conns.filter((c) => c.dst_port === p)
   }
   if (statusFilter.value === 'active') {
     conns = conns.filter((c) => c.status === 'active')
@@ -262,6 +279,22 @@ const displayItems = computed(() => {
             </button>
           </div>
         </div>
+      </div>
+
+      <!-- Port Filter Chips -->
+      <div class="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+        <span class="text-[11px] text-slate-400 dark:text-slate-500 whitespace-nowrap mr-0.5">常用端口:</span>
+        <button
+          v-for="chip in portChips"
+          :key="chip.value"
+          @click="selectedPort = chip.value"
+          class="px-2 py-0.5 rounded-lg text-[11px] transition-all whitespace-nowrap"
+          :class="selectedPort === chip.value
+            ? 'bg-emerald-500 text-white font-medium shadow-2xs'
+            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
+        >
+          {{ chip.label }}
+        </button>
       </div>
 
       <!-- Search Box Row (Full Width on mobile, expands cleanly) -->

@@ -48,6 +48,7 @@ type Hub struct {
 	db          *store.Database
 
 	mu              sync.RWMutex
+	broadcastMu     sync.Mutex // 保护 webConns 并发写入，避免多协程写入同一连接导致 panic
 	webConns        map[*websocket.Conn]bool
 	nodes           map[string]*model.NodeInfo
 	nodeLANMap      map[string]map[string]*model.DeviceStats // 按 nodeID 隔离局域网终端
@@ -106,12 +107,20 @@ func (h *Hub) runLivenessChecker() {
 				h.BroadcastNodeStatus()
 			}
 
+			// 线程安全写入 PingMessage
+			h.broadcastMu.Lock()
 			h.mu.RLock()
+			conns := make([]*websocket.Conn, 0, len(h.webConns))
 			for conn := range h.webConns {
+				conns = append(conns, conn)
+			}
+			h.mu.RUnlock()
+
+			for _, conn := range conns {
 				_ = conn.SetWriteDeadline(now.Add(2 * time.Second))
 				_ = conn.WriteMessage(websocket.PingMessage, nil)
 			}
-			h.mu.RUnlock()
+			h.broadcastMu.Unlock()
 		}
 	}
 }
@@ -256,6 +265,10 @@ func (h *Hub) processAgentPayload(p *model.NodeMetricsPayload, node *model.NodeI
 		statusChanged = true
 	}
 
+	node.CPUUsage = p.CPUUsage
+	node.MemUsage = p.MemUsage
+	node.Uptime = p.Uptime
+
 	if !node.CustomLocation {
 		if p.PublicIP != "" && node.IP != p.PublicIP {
 			node.IP = p.PublicIP
@@ -304,6 +317,12 @@ func (h *Hub) processAgentPayload(p *model.NodeMetricsPayload, node *model.NodeI
 	}
 	h.mu.Unlock()
 
+	type devDelta struct {
+		bytesIn  int64
+		bytesOut int64
+	}
+	devDeltas := make(map[string]*devDelta)
+
 	for _, flow := range p.Flows {
 		flow.SrcIP = normalizeIP(flow.SrcIP)
 		flow.DstIP = normalizeIP(flow.DstIP)
@@ -339,36 +358,51 @@ func (h *Hub) processAgentPayload(p *model.NodeMetricsPayload, node *model.NodeI
 		particleFlows = append(particleFlows, pf)
 
 		if flow.SrcIP != "" {
-			h.mu.Lock()
-			dev, ok := lanDevices[flow.SrcIP]
+			d, ok := devDeltas[flow.SrcIP]
 			if !ok {
-				alias, isCustom := h.db.GetDeviceAliasDirect(flow.SrcIP)
+				d = &devDelta{}
+				devDeltas[flow.SrcIP] = d
+			}
+			d.bytesIn += flow.BytesIn
+			d.bytesOut += flow.BytesOut
+		}
+	}
+
+	// 循环结束后一次性批量更新局域网终端统计，避免在循环内部高频加锁争抢
+	if len(devDeltas) > 0 {
+		nowTs := time.Now().Unix()
+		h.mu.Lock()
+		for srcIP, delta := range devDeltas {
+			dev, ok := lanDevices[srcIP]
+			if !ok {
+				alias, isCustom := h.db.GetDeviceAliasDirect(srcIP)
 				name := alias
 				if name == "" {
-					name = flow.SrcIP
+					name = srcIP
 				}
 
 				dev = &model.DeviceStats{
-					IP:         flow.SrcIP,
+					IP:         srcIP,
 					Name:       name,
 					Category:   "device",
 					IsCustom:   isCustom,
 					NodeID:     p.NodeID,
-					LastActive: time.Now().Unix(),
+					LastActive: nowTs,
 				}
-				lanDevices[flow.SrcIP] = dev
-			} else if alias, hasAlias := h.db.GetDeviceAliasDirect(flow.SrcIP); hasAlias && alias != "" {
+				lanDevices[srcIP] = dev
+			} else if alias, hasAlias := h.db.GetDeviceAliasDirect(srcIP); hasAlias && alias != "" {
 				dev.Name = alias
 				dev.IsCustom = true
 			}
 
-			dev.RateInBps += float64(flow.BytesIn) / interval
-			dev.RateOutBps += float64(flow.BytesOut) / interval
-			dev.TotalIn += flow.BytesIn
-			dev.TotalOut += flow.BytesOut
-			dev.LastActive = time.Now().Unix()
-			h.mu.Unlock()
+			dev.RateInBps += float64(delta.bytesIn) / interval
+			dev.RateOutBps += float64(delta.bytesOut) / interval
+			dev.TotalIn += delta.bytesIn
+			dev.TotalOut += delta.bytesOut
+			dev.LastActive = nowTs
+			dev.ConnCount++
 		}
+		h.mu.Unlock()
 	}
 
 	if len(particleFlows) > 0 {
@@ -454,10 +488,17 @@ func (h *Hub) BroadcastToWeb(msg *model.LiveBroadcastMessage) {
 		return
 	}
 
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+	h.broadcastMu.Lock()
+	defer h.broadcastMu.Unlock()
 
+	h.mu.RLock()
+	conns := make([]*websocket.Conn, 0, len(h.webConns))
 	for conn := range h.webConns {
+		conns = append(conns, conn)
+	}
+	h.mu.RUnlock()
+
+	for _, conn := range conns {
 		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 		_ = conn.WriteMessage(websocket.TextMessage, data)
 	}
@@ -473,9 +514,17 @@ func (h *Hub) BroadcastNodeStatus() {
 		return
 	}
 
+	h.broadcastMu.Lock()
+	defer h.broadcastMu.Unlock()
+
 	h.mu.RLock()
-	defer h.mu.RUnlock()
+	conns := make([]*websocket.Conn, 0, len(h.webConns))
 	for conn := range h.webConns {
+		conns = append(conns, conn)
+	}
+	h.mu.RUnlock()
+
+	for _, conn := range conns {
 		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 		_ = conn.WriteMessage(websocket.TextMessage, data)
 	}

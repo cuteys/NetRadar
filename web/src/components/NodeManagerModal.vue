@@ -148,6 +148,16 @@ const formatDate = (d?: string) => {
     return d
   }
 }
+
+const formatUptime = (seconds?: number) => {
+  if (!seconds || seconds <= 0) return ''
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const mins = Math.floor((seconds % 3600) / 60)
+  if (days > 0) return `${days}天${hours}小时`
+  if (hours > 0) return `${hours}小时${mins}分`
+  return `${mins}分钟`
+}
 </script>
 
 <template>
@@ -444,6 +454,9 @@ const formatDate = (d?: string) => {
                     <span v-if="node.ip">IP: {{ compressIP(node.ip) }}</span>
                     <span v-if="node.gateway_lat && node.gateway_lng">坐标: [{{ node.gateway_lng.toFixed(2) }}, {{ node.gateway_lat.toFixed(2) }}]</span>
                     <span v-if="node.os">系统: {{ node.os }}/{{ node.arch }}</span>
+                    <span v-if="node.cpu_usage !== undefined && node.cpu_usage >= 0">CPU: <strong class="text-slate-700 dark:text-slate-300 font-medium">{{ node.cpu_usage.toFixed(1) }}%</strong></span>
+                    <span v-if="node.mem_usage !== undefined && node.mem_usage >= 0">内存: <strong class="text-slate-700 dark:text-slate-300 font-medium">{{ node.mem_usage.toFixed(1) }}%</strong></span>
+                    <span v-if="node.uptime">运行: <strong class="text-slate-700 dark:text-slate-300 font-medium">{{ formatUptime(node.uptime) }}</strong></span>
                     <span>最后在线: {{ formatDate(node.last_seen) }}</span>
                   </div>
                 </div>

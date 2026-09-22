@@ -40,12 +40,29 @@ func NewAuthService(adminUser, adminPassword, jwtSecret string) (*AuthService, e
 		return nil, err
 	}
 
-	return &AuthService{
+	s := &AuthService{
 		jwtSecret:      []byte(jwtSecret),
 		adminUsername:  adminUser,
 		adminPwdHash:   hash,
 		failedAttempts: make(map[string]*attemptInfo),
-	}, nil
+	}
+
+	// 定期清理已过封禁期的 IP 记录，防止内存泄漏
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for now := range ticker.C {
+			s.rateLimitMu.Lock()
+			for ip, info := range s.failedAttempts {
+				if !info.blockedTill.IsZero() && now.After(info.blockedTill) {
+					delete(s.failedAttempts, ip)
+				}
+			}
+			s.rateLimitMu.Unlock()
+		}
+	}()
+
+	return s, nil
 }
 
 func (s *AuthService) GetUsername() string {
@@ -164,22 +181,7 @@ func (s *AuthService) HTTPMiddleware(next http.Handler) http.Handler {
 }
 
 func (s *AuthService) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		tokenStr := s.extractToken(r)
-		if tokenStr == "" {
-			http.Error(w, `{"error":"unauthorized","message":"missing authorization"}`, http.StatusUnauthorized)
-			return
-		}
-
-		claims, err := s.ValidateToken(tokenStr)
-		if err != nil {
-			http.Error(w, `{"error":"unauthorized","message":"session expired"}`, http.StatusUnauthorized)
-			return
-		}
-
-		ctx := context.WithValue(r.Context(), UserContextKey, claims.Username)
-		next(w, r.WithContext(ctx))
-	}
+	return s.HTTPMiddleware(next).ServeHTTP
 }
 
 func (s *AuthService) ValidateRequest(r *http.Request) bool {

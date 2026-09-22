@@ -1,18 +1,23 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
 
 	"netradar/pkg/utils"
+	"netradar/pkg/version"
 	"netradar/server/api"
 	"netradar/server/auth"
 	"netradar/server/config"
-	"netradar/pkg/version"
 	"netradar/server/geo"
 	"netradar/server/store"
 	"netradar/server/ws"
@@ -22,6 +27,19 @@ import (
 var embeddedDist embed.FS
 
 var Version = version.Version
+
+func formatDisplayAddr(addr string) string {
+	if strings.HasPrefix(addr, ":") {
+		return "http://127.0.0.1" + addr
+	}
+	if strings.HasPrefix(addr, "0.0.0.0:") {
+		return "http://127.0.0.1:" + strings.TrimPrefix(addr, "0.0.0.0:")
+	}
+	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
+		return "http://" + addr
+	}
+	return addr
+}
 
 func main() {
 	cfg := config.LoadConfig()
@@ -69,14 +87,14 @@ func main() {
 				"*****************************************************************\n"+
 				"*             NetRadar 控制台首次部署初始化成功                *\n"+
 				"*                                                               *\n"+
-				"*   管理后台地址: http://127.0.0.1%s                  *\n"+
+				"*   管理后台地址: %-45s *\n"+
 				"*   管理员用户名: %-20s                          *\n"+
 				"*   随机初始密码: %-20s                          *\n"+
 				"*   探针通信密钥: %-20s                          *\n"+
 				"*                                                               *\n"+
 				"*   (提示：首次登录后可在右上角【设置】中随时修改配置)         *\n"+
 				"*****************************************************************\n",
-				cfg.ListenAddr, adminUser, initialPwd, cfg.AgentToken)
+				formatDisplayAddr(cfg.ListenAddr), adminUser, initialPwd, cfg.AgentToken)
 			log.Printf("%s", banner)
 		}
 	} else {
@@ -138,8 +156,23 @@ func main() {
 		Handler: router,
 	}
 
-	log.Printf("[Server] NetRadar 控制台已启动: http://127.0.0.1%s", cfg.ListenAddr)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("[Server] 运行异常: %v", err)
+	go func() {
+		log.Printf("[Server] NetRadar 控制台已启动: %s", formatDisplayAddr(cfg.ListenAddr))
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("[Server] 运行异常: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("[Server] 正在平滑关闭服务...")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("[Server] 服务强制关闭: %v", err)
 	}
+	log.Println("[Server] 服务已安全退出")
 }

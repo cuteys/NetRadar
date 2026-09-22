@@ -3,22 +3,17 @@ import { ref, computed } from 'vue'
 import { useRadarStore } from '../stores/radarStore'
 import { useThemeStore } from '../stores/themeStore'
 import { useAuthStore } from '../stores/authStore'
-import { formatSpeed } from '../utils/format'
 import SettingsModal from './SettingsModal.vue'
 import NodeManagerModal from './NodeManagerModal.vue'
 import AppleSelect, { type DropdownOption } from './AppleSelect.vue'
 import {
   Radar,
-  ArrowDown,
-  ArrowUp,
-  Activity,
   Sun,
   Moon,
   Monitor,
   LogOut,
   Settings,
   Server,
-  ChevronDown,
   Pause,
   Play
 } from 'lucide-vue-next'
@@ -35,12 +30,6 @@ const handleOpenNodeManager = async () => {
   await radar.fetchNodes()
   await radar.fetchSystemSettings()
 }
-
-const activeNodeName = computed(() => {
-  if (radar.selectedNodeId === 'all') return '全部节点'
-  const n = (radar.nodes || []).find((item) => item.id === radar.selectedNodeId)
-  return n ? n.name : '边缘节点'
-})
 
 const nodeOptions = computed<DropdownOption[]>(() => {
   const list: DropdownOption[] = [

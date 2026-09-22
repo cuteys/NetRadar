@@ -30,6 +30,7 @@ RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 
 COPY --from=go-builder /netradar /app/netradar
+COPY install-agent.sh /app/install-agent.sh
 
 EXPOSE 8899
 VOLUME ["/data"]

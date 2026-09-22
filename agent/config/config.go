@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"netradar/pkg/utils"
 )
 
 type AgentConfig struct {
@@ -31,7 +33,7 @@ func generateUUID() string {
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
-// getStableHardwareUUID 基于路由器硬件机器码与主网卡 MAC 派生确定性 UUID，杜绝自更新或配置短暂丢失导致 UUID 突变
+// getStableHardwareUUID 基于设备机器码与网卡 MAC 派生确定性 UUID
 func getStableHardwareUUID() string {
 	var hardwareKey string
 
@@ -144,14 +146,12 @@ func resolveDefaultConfigPath() string {
 
 func LoadConfig() *AgentConfig {
 	cfg := &AgentConfig{}
-	var deprecatedNodeName string
 
 	defaultConfigPath := resolveDefaultConfigPath()
 	flag.StringVar(&cfg.ConfigFile, "c", defaultConfigPath, "")
 	flag.StringVar(&cfg.ServerURL, "server", "", "")
 	flag.StringVar(&cfg.Token, "token", "", "")
 	flag.StringVar(&cfg.NodeID, "node-id", "", "")
-	flag.StringVar(&deprecatedNodeName, "node-name", "", "")
 	flag.IntVar(&cfg.Interval, "interval", 0, "")
 	flag.BoolVar(&cfg.Mock, "mock", false, "")
 
@@ -163,16 +163,21 @@ func LoadConfig() *AgentConfig {
 	}
 
 	if cfg.ServerURL == "" {
-		cfg.ServerURL = getEnv("NETRADAR_SERVER", "ws://127.0.0.1:8899/ws/agent")
+		cfg.ServerURL = utils.GetEnv("NETRADAR_SERVER", "ws://127.0.0.1:8899/ws/agent")
 	}
 	if cfg.Token == "" {
-		cfg.Token = getEnv("NETRADAR_TOKEN", "netradar_secret_token_12345")
+		cfg.Token = utils.GetEnv("NETRADAR_TOKEN", "netradar_secret_token_12345")
 	}
 	if cfg.NodeID == "" {
-		cfg.NodeID = getEnv("NETRADAR_NODE_ID", getStableHardwareUUID())
+		cfg.NodeID = utils.GetEnv("NETRADAR_NODE_ID", getStableHardwareUUID())
 	}
 	if cfg.Interval <= 0 {
-		cfg.Interval = 2
+		envInterval, _ := strconv.Atoi(os.Getenv("NETRADAR_INTERVAL"))
+		if envInterval > 0 {
+			cfg.Interval = envInterval
+		} else {
+			cfg.Interval = 3
+		}
 	}
 
 	saveStandardYAML(cfg.ConfigFile, cfg)
@@ -209,7 +214,7 @@ func parseSimpleYAML(content string, cfg *AgentConfig) {
 			}
 		case "interval":
 			if cfg.Interval == 0 {
-				if iv, err := strconv.Atoi(v); err == nil {
+				if iv, err := strconv.Atoi(v); err == nil && iv > 0 {
 					cfg.Interval = iv
 				}
 			}
@@ -218,25 +223,25 @@ func parseSimpleYAML(content string, cfg *AgentConfig) {
 }
 
 func saveStandardYAML(path string, cfg *AgentConfig) {
-	dir := filepath.Dir(path)
-	if dir != "" && dir != "." {
-		_ = os.MkdirAll(dir, 0755)
-	}
-
 	content := fmt.Sprintf(`server: "%s"
 token: "%s"
 uuid: "%s"
 interval: %d
 `, cfg.ServerURL, cfg.Token, cfg.NodeID, cfg.Interval)
 
-	if err := os.WriteFile(path, []byte(content), 0644); err == nil {
-		log.Printf("[探针] 配置文件已格式化更新: %s", path)
+	// 内容一致则跳过写入，避免闪存介质频繁擦写
+	if existing, err := os.ReadFile(path); err == nil {
+		if strings.TrimSpace(string(existing)) == strings.TrimSpace(content) {
+			return
+		}
 	}
-}
 
-func getEnv(key, defaultVal string) string {
-	if val, ok := os.LookupEnv(key); ok && val != "" {
-		return val
+	dir := filepath.Dir(path)
+	if dir != "" && dir != "." {
+		_ = os.MkdirAll(dir, 0755)
 	}
-	return defaultVal
+
+	if err := os.WriteFile(path, []byte(content), 0644); err == nil {
+		log.Printf("[探针] 配置文件已更新: %s", path)
+	}
 }

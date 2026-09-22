@@ -76,6 +76,9 @@ export interface NodeInfo {
   gateway_lng: number
   custom_location?: boolean
   last_seen?: string
+  cpu_usage?: number
+  mem_usage?: number
+  uptime?: number
 }
 
 export interface WavePoint {

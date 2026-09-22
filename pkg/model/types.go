@@ -47,6 +47,9 @@ type NodeMetricsPayload struct {
 	GatewayLat float64 `json:"gateway_lat,omitempty"`
 	GatewayLng float64 `json:"gateway_lng,omitempty"`
 	Version    string  `json:"version,omitempty"`
+	CPUUsage   float64 `json:"cpu_usage,omitempty"`
+	MemUsage   float64 `json:"mem_usage,omitempty"`
+	Uptime     int64   `json:"uptime,omitempty"`
 }
 
 type NodeInfo struct {
@@ -66,6 +69,9 @@ type NodeInfo struct {
 	GatewayLat     float64 `json:"gateway_lat"`
 	GatewayLng     float64 `json:"gateway_lng"`
 	CustomLocation bool    `json:"custom_location,omitempty"`
+	CPUUsage       float64 `json:"cpu_usage,omitempty"`
+	MemUsage       float64 `json:"mem_usage,omitempty"`
+	Uptime         int64   `json:"uptime,omitempty"`
 }
 
 type UpdateNodeRequest struct {

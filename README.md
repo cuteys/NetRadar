@@ -57,23 +57,23 @@ docker compose logs -f netradar
 
 ### 2. 部署探针 (Agent)
 
-探针默认安装目录为 `/opt/netradar/agent`。
+探针优先持久化安装至 `/data/netradar/agent`（OpenWrt/小米路由）或 `/opt/netradar/agent`。
 
 #### Linux / OpenWrt / 小米路由器 / macOS
 
 一键安装（自动识别 CPU 架构、开启内核流量记账并配置开机自启守护）：
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh | bash -s -- -s "YOUR_SERVER_IP:8899" -t "YOUR_AGENT_TOKEN" -n "路由器名称"
+curl -fsSL -k https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh | sh -s -- -s "YOUR_SERVER_IP:8899" -t "YOUR_AGENT_TOKEN" -n "路由器名称"
 ```
 
 > **国内服务器加速**：
 > ```bash
-> curl -sSL https://gh-proxy.com/https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh | bash -s -- -s "YOUR_SERVER_IP:8899" -t "YOUR_AGENT_TOKEN"
+> curl -fsSL -k https://gh-proxy.com/https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh | sh -s -- -s "YOUR_SERVER_IP:8899" -t "YOUR_AGENT_TOKEN"
 > ```
 > **一键卸载**：
 > ```bash
-> curl -sSL https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh | bash -s -- --uninstall
+> curl -fsSL -k https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh | sh -s -- --uninstall
 > ```
 
 #### 免安装单二进制运行
@@ -101,8 +101,8 @@ curl -sSL https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent
 | :--- | :--- |
 | `-server` | 控制端 WebSocket 地址（如 `ws://10.0.0.1:8899/ws/agent`） |
 | `-token` | 探针通信密钥 |
-| `-node-name` | 节点显示名称 |
-| `-interval` | 采样上报间隔（默认 2 秒） |
+| `-node-name` | 节点显示名称（别名 `-name`） |
+| `-interval` | 采样上报间隔（默认 3 秒） |
 
 ---
 

@@ -255,20 +255,25 @@ func (h *APIHandler) HandleGetHistory(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().Unix()
 	var sinceTs int64
 	limit := 100
+	bucketSeconds := 0
 
 	switch rangeParam {
 	case "1h":
 		sinceTs = now - 3600
+		bucketSeconds = 30 // 30 秒分桶，共 120 点
 	case "24h":
 		sinceTs = now - 86400
+		bucketSeconds = 600 // 10 分钟分桶，共 144 点
 	case "7d":
 		sinceTs = now - 7*86400
+		bucketSeconds = 3600 // 1 小时分桶，共 168 点
 	default:
 		sinceTs = now - 600
 		limit = 60
+		bucketSeconds = 0
 	}
 
-	points, err := h.db.GetHistory(nodeID, sinceTs, limit)
+	points, err := h.db.GetHistory(nodeID, sinceTs, limit, bucketSeconds)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
