@@ -78,10 +78,12 @@ do_uninstall() {
         sed -i '/net\.netfilter\.nf_conntrack_acct/d' /etc/sysctl.conf 2>/dev/null || true
     fi
 
-    # 终止探针与拉起脚本进程（精准匹配，不误伤系统其他 agent 服务）
-    pkill -9 -f "/netradar/agent" 2>/dev/null || true
-    pkill -9 -f "start_agent\.sh" 2>/dev/null || true
-    pkill -9 -f "agent.*-server" 2>/dev/null || true
+    # 终止探针与拉起脚本进程（多重保障：PID 精准过滤 + killall 兜底，兼容所有 BusyBox）
+    for pid in $(ps -w 2>/dev/null | grep -E "netradar/agent|start_agent" | grep -v grep | awk '{print $1}'); do
+        kill -9 "$pid" 2>/dev/null || true
+    done
+    killall -9 agent 2>/dev/null || true
+    pkill -9 -f "netradar" 2>/dev/null || true
 
     # 清除程序文件、配置与临时日志
     rm -rf /opt/netradar /data/netradar /etc/netradar /tmp/netradar
@@ -408,7 +410,10 @@ fi
 if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet netradar-agent 2>/dev/null; then
     systemctl stop netradar-agent 2>/dev/null || true
 fi
-killall agent 2>/dev/null || true
+for pid in $(ps -w 2>/dev/null | grep -E "netradar/agent|start_agent" | grep -v grep | awk '{print $1}'); do
+    kill -9 "$pid" 2>/dev/null || true
+done
+killall -9 agent 2>/dev/null || true
 
 cp -f "${TMP_DIR}/agent" "$AGENT_BIN"
 chmod +x "$AGENT_BIN"
