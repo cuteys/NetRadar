@@ -10,17 +10,12 @@ import {
   ArrowUp,
   Activity,
   ArrowRight,
+  X,
 } from 'lucide-vue-next'
 
 const radar = useRadarStore()
 
 const listContainer = ref<HTMLDivElement | null>(null)
-const searchQuery = computed({
-  get: () => radar.searchFilter,
-  set: (val: string) => {
-    radar.searchFilter = val
-  },
-})
 
 watch(() => radar.searchFilter, () => {
   if (listContainer.value) {
@@ -67,9 +62,35 @@ const formatDuration = (startMs: number, endMs: number) => {
 
 // 实时处理连接列表
 const displayItems = computed(() => {
+  const query = radar.searchFilter.trim().toLowerCase()
+  const tokens = query ? query.split(/\s+/).filter(Boolean) : []
+  const matchTokens = (haystack: string) => {
+    if (tokens.length === 0) return true
+    return tokens.every((t) => haystack.includes(t))
+  }
+
   // 1. 历史模式
   if (radar.selectedTimeRange !== 'realtime') {
-    const list = [...(radar.filteredHistoricalDestinations || [])]
+    let list = radar.historicalDestinations || []
+    if (tokens.length > 0) {
+      list = list.filter((h) => {
+        const hNodeName = radar.getNodeName(h.node_id)
+        const text = [
+          h.dst_ip,
+          compressIP(h.dst_ip),
+          h.dst_port ? String(h.dst_port) : '',
+          h.dst_port ? `:${h.dst_port}` : '',
+          formatCountry(h.country),
+          h.country || '',
+          h.city || '',
+          h.isp || '',
+          h.protocol || '',
+          hNodeName,
+        ].join(' ').toLowerCase()
+        return matchTokens(text)
+      })
+    }
+    const copy = [...list]
     if (sortBy.value === 'time') {
       list.sort((a, b) => (b.last_seen || 0) - (a.last_seen || 0))
     } else {
@@ -98,11 +119,42 @@ const displayItems = computed(() => {
     }))
   }
 
-  let conns = radar.filteredConnections
+  let conns = radar.activeConnections
+  if (radar.selectedNodeId && radar.selectedNodeId !== 'all') {
+    conns = conns.filter((c) => c.node_id === radar.selectedNodeId)
+  }
+  if (radar.selectedDeviceIp) {
+    conns = conns.filter((c) => c.src_ip === radar.selectedDeviceIp)
+  }
   if (statusFilter.value === 'active') {
     conns = conns.filter((c) => c.status === 'active')
   } else if (statusFilter.value === 'closed') {
     conns = conns.filter((c) => c.status === 'closed')
+  }
+
+  if (tokens.length > 0) {
+    conns = conns.filter((c) => {
+      const devName = radar.getDeviceName(c.src_ip)
+      const nodeName = radar.getNodeName(c.node_id)
+      const text = [
+        c.src_ip,
+        compressIP(c.src_ip),
+        c.src_port ? String(c.src_port) : '',
+        c.src_port ? `:${c.src_port}` : '',
+        devName,
+        c.dst_ip,
+        compressIP(c.dst_ip),
+        c.dst_port ? String(c.dst_port) : '',
+        c.dst_port ? `:${c.dst_port}` : '',
+        formatCountry(c.country),
+        c.country,
+        c.city,
+        c.isp,
+        c.protocol,
+        nodeName,
+      ].join(' ').toLowerCase()
+      return matchTokens(text)
+    })
   }
 
   const copy = [...conns]
@@ -216,11 +268,19 @@ const displayItems = computed(() => {
       <div class="relative w-full">
         <Search class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
         <input
-          v-model="searchQuery"
+          v-model="radar.searchFilter"
           type="text"
-          class="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-all font-mono"
+          class="w-full pl-8 pr-8 py-1.5 rounded-xl bg-white/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-all font-mono"
           placeholder="搜索 IP / 端口 / 归属地 / 终端名称 / 协议..."
         />
+        <button
+          v-if="radar.searchFilter"
+          @click="radar.searchFilter = ''"
+          class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-0.5"
+          title="清空搜索"
+        >
+          <X class="w-3.5 h-3.5" />
+        </button>
       </div>
     </div>
 
@@ -344,7 +404,7 @@ const displayItems = computed(() => {
         class="h-44 flex flex-col items-center justify-center text-slate-400 text-xs py-8 space-y-1"
       >
         <Activity class="w-6 h-6 text-slate-300 dark:text-slate-600 mb-1" />
-        <span>{{ searchQuery ? '未找到匹配的连接审计记录' : '暂无外联网络连接数据，探针正在持续监听...' }}</span>
+        <span>{{ radar.searchFilter ? '未找到匹配的连接审计记录' : '暂无外联网络连接数据，探针正在持续监听...' }}</span>
       </div>
     </div>
   </div>

@@ -92,12 +92,16 @@ const initChart = () => {
         formatter: (val: number) => formatSpeed(val),
       },
     },
+    color: ['#10b981', '#0284c7'],
     series: [
       {
         name: '下行速率',
         type: 'line',
         smooth: 0.35,
         symbol: 'none',
+        itemStyle: {
+          color: '#10b981',
+        },
         lineStyle: {
           width: 2,
           color: '#10b981',
@@ -115,6 +119,9 @@ const initChart = () => {
         type: 'line',
         smooth: 0.35,
         symbol: 'none',
+        itemStyle: {
+          color: '#0284c7',
+        },
         lineStyle: {
           width: 2,
           color: '#0284c7',

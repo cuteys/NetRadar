@@ -5,7 +5,7 @@ import worldGeoJson from '../assets/world.json'
 import chinaGeoJson from '../assets/china.json'
 import { useRadarStore } from '../stores/radarStore'
 import { useThemeStore } from '../stores/themeStore'
-import { formatBytes, compressIP, formatDeviceName } from '../utils/format'
+import { formatBytes, formatSpeed, compressIP, formatDeviceName } from '../utils/format'
 import { formatCountry } from '../utils/countryNames'
 import { Globe, RotateCcw } from 'lucide-vue-next'
 
@@ -769,9 +769,9 @@ const initMapOption = () => {
             <div style="font-size: 11px; opacity: 0.88; line-height: 1.6;">
               <div>目标 IP: <span style="font-family: monospace; font-weight: 600;">${displayDstIP}${d.dst_port ? ':' + d.dst_port : ''}</span></div>
               <div>来源设备: <span style="font-family: monospace;">${displaySrcDevice}</span></div>
-              <div>协议类型: <span style="font-weight: 500;">${d.protocol || 'TCP'}</span> · ${d.isp || '骨干网络'}</div>
-              <div>实时下行: <span style="color: #10b981; font-weight: 600;">${formatBytes(d.bytes_in)}</span></div>
-              <div>实时上行: <span style="color: #0ea5e9; font-weight: 600;">${formatBytes(d.bytes_out)}</span></div>
+              <div>实时类型: <span style="font-weight: 500;">${d.protocol || 'TCP'}</span> · ${d.isp || '骨干网络'}</div>
+              <div>实时速率: <span style="color: #10b981; font-weight: 600;">↓ ${formatSpeed(d.bytes_in / 2)}</span> <span style="color: #0ea5e9; font-weight: 600; margin-left: 6px;">↑ ${formatSpeed(d.bytes_out / 2)}</span></div>
+              <div>周期流量: <span style="opacity: 0.85;">↓ ${formatBytes(d.bytes_in)} / ↑ ${formatBytes(d.bytes_out)}</span></div>
             </div>
           `
         }

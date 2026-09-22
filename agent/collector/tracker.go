@@ -108,6 +108,14 @@ func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackE
 			deltaOut = 0
 		}
 
+		// 若之前记录为 0 且当前值较大（如刚开启内核流量统计的已有长连接），重新对齐基线，避免产生假峰值
+		if (state.LastBytesIn == 0 && bytesIn > 2*1024*1024) || (state.LastBytesOut == 0 && bytesOut > 2*1024*1024) {
+			state.LastBytesIn = bytesIn
+			state.LastBytesOut = bytesOut
+			state.LastSeen = now
+			continue
+		}
+
 		state.LastBytesIn = bytesIn
 		state.LastBytesOut = bytesOut
 		state.LastSeen = now
