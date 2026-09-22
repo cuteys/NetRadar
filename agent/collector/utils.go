@@ -28,7 +28,6 @@ func init() {
 	}
 }
 
-// 判断是否为局域网内网 IP
 func IsPrivateIP(ipStr string) bool {
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
@@ -42,7 +41,6 @@ func IsPrivateIP(ipStr string) bool {
 	return false
 }
 
-// 推断终端分类
 func GuessDeviceCategory(ipStr string) string {
 	parts := strings.Split(ipStr, ".")
 	if len(parts) == 4 {
@@ -66,7 +64,6 @@ func GuessDeviceCategory(ipStr string) string {
 	return "device"
 }
 
-// 推断默认终端名称
 func GuessDeviceName(ipStr string) string {
 	parts := strings.Split(ipStr, ".")
 	if len(parts) == 4 {

@@ -32,7 +32,6 @@ var ConntrackPaths = []string{
 	"/proc/net/ip_conntrack",
 }
 
-// 检查 Linux 内核连接跟踪表是否存在且可读
 func CheckConntrackAvailable() (string, bool) {
 	for _, p := range ConntrackPaths {
 		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
@@ -42,7 +41,6 @@ func CheckConntrackAvailable() (string, bool) {
 	return "", false
 }
 
-// 读取并解析内核连接跟踪表
 func ReadConntrackEntries(path string) ([]*RawConntrackEntry, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -66,7 +64,6 @@ func ReadConntrackEntries(path string) ([]*RawConntrackEntry, error) {
 	return entries, scanner.Err()
 }
 
-// 解析单行 conntrack 记录
 func parseConntrackLine(line string) *RawConntrackEntry {
 	fields := strings.Fields(line)
 	if len(fields) < 8 {
@@ -89,7 +86,7 @@ func parseConntrackLine(line string) *RawConntrackEntry {
 		}
 	}
 
-	var dir int // 0: 原方向, 1: 应答方向
+	var dir int
 	for _, f := range fields {
 		if f == "ESTABLISHED" || f == "TIME_WAIT" || f == "CLOSE_WAIT" || f == "SYN_SENT" {
 			entry.State = f
@@ -153,7 +150,6 @@ func parseConntrackLine(line string) *RawConntrackEntry {
 	return entry
 }
 
-// 生成双向连接唯一标识
 func GenerateFlowKey(proto, src string, sport int, dst string, dport int) string {
 	if src > dst {
 		src, dst = dst, src

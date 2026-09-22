@@ -289,34 +289,23 @@ const displayItems = computed(() => {
             </div>
           </div>
 
-          <!-- Right: Active Status & Time -->
-          <div class="flex items-center gap-1.5 text-[10px] text-slate-400 flex-shrink-0 pt-0.5">
-            <span v-if="item.duration" class="hidden md:inline text-slate-400">
-              {{ item.duration }}
-            </span>
-            <span class="flex items-center gap-1 whitespace-nowrap">
-              <span
-                class="w-1.5 h-1.5 rounded-full"
-                :class="item.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'"
-              ></span>
-              <span>{{ formatAgo(item.last_active) }}</span>
-            </span>
-          </div>
-        </div>
+          <!-- Right: Active Status & Time (Top) + Live Speed (Bottom) -->
+          <div class="flex flex-col items-end gap-1 text-[10px] text-slate-400 flex-shrink-0 pt-0.5 font-mono">
+            <div class="flex items-center gap-1.5">
+              <span v-if="item.duration" class="hidden md:inline text-slate-400">
+                {{ item.duration }}
+              </span>
+              <span class="flex items-center gap-1 whitespace-nowrap">
+                <span
+                  class="w-1.5 h-1.5 rounded-full"
+                  :class="item.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'"
+                ></span>
+                <span>{{ formatAgo(item.last_active) }}</span>
+              </span>
+            </div>
 
-        <!-- Bottom Row: Geo & ISP (Left) | Speeds & Cumulative Traffic (Right) -->
-        <div class="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100/60 dark:border-slate-700/40 text-slate-500 dark:text-slate-400 gap-2">
-          <!-- Geo & ISP Info -->
-          <div class="truncate text-slate-400 text-[10px] sm:text-[11px] min-w-0 flex-1">
-            <span>{{ formatCountry(item.country) }}</span>
-            <span v-if="item.city"> · {{ item.city }}</span>
-            <span v-if="item.isp" class="hidden sm:inline"> ({{ item.isp }})</span>
-          </div>
-
-          <!-- Speeds & Total Traffic Stats (Clash Layout) -->
-          <div class="flex items-center gap-2.5 flex-shrink-0 font-mono text-[10px] sm:text-[11px]">
-            <!-- Live Speed (only in realtime) -->
-            <div v-if="!item.isHistorical && (item.speed_in > 0 || item.speed_out > 0)" class="flex items-center gap-1.5">
+            <!-- Live Speed (relocated below time) -->
+            <div v-if="!item.isHistorical && (item.speed_in > 0 || item.speed_out > 0)" class="flex items-center gap-1.5 text-[10px]">
               <span class="text-emerald-600 dark:text-emerald-400 font-medium flex items-center whitespace-nowrap">
                 <ArrowDown class="w-2.5 h-2.5 mr-0.5" />
                 {{ formatSpeed(item.speed_in) }}
@@ -326,13 +315,22 @@ const displayItems = computed(() => {
                 {{ formatSpeed(item.speed_out) }}
               </span>
             </div>
+          </div>
+        </div>
 
-            <!-- Total Accumulated Traffic -->
-            <div class="flex items-center gap-1 text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">
-              <span title="下行流量">↓{{ formatBytes(item.total_in) }}</span>
-              <span class="text-slate-300 dark:text-slate-600">/</span>
-              <span title="上行流量">↑{{ formatBytes(item.total_out) }}</span>
-            </div>
+        <!-- Bottom Row: Geo & ISP (Left) | Cumulative Traffic (Right) -->
+        <div class="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100/60 dark:border-slate-700/40 text-slate-500 dark:text-slate-400 gap-2">
+          <!-- Geo & ISP Info -->
+          <div class="truncate text-slate-400 text-[10px] sm:text-[11px] min-w-0 flex-1">
+            <span>{{ formatCountry(item.country) }}</span><span v-if="item.city">·{{ item.city }}</span>
+            <span v-if="item.isp" class="hidden sm:inline"> ({{ item.isp }})</span>
+          </div>
+
+          <!-- Total Accumulated Traffic -->
+          <div class="flex items-center gap-1 text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap font-mono text-[10px] sm:text-[11px] flex-shrink-0">
+            <span title="下行流量">↓{{ formatBytes(item.total_in) }}</span>
+            <span class="text-slate-300 dark:text-slate-600">/</span>
+            <span title="上行流量">↑{{ formatBytes(item.total_out) }}</span>
           </div>
         </div>
       </div>

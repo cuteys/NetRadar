@@ -159,7 +159,7 @@ onUnmounted(() => {
               <div>
                 <h3 class="font-bold text-base text-slate-900 dark:text-white leading-tight">系统与安全配置</h3>
                 <div class="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                  <span>当前版本: <strong class="text-slate-700 dark:text-slate-300 font-semibold">{{ radar.systemSettings?.version || 'v0.1.5' }}</strong></span>
+                  <span>当前版本: <strong class="text-slate-700 dark:text-slate-300 font-semibold">{{ radar.systemSettings?.version || 'v0.1.6' }}</strong></span>
                   <span v-if="radar.systemSettings?.latest_version" class="text-slate-300 dark:text-slate-600">·</span>
                   <span v-if="radar.systemSettings?.latest_version">
                     最新版本: <strong class="font-semibold" :class="hasNewVersion ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'">{{ radar.systemSettings.latest_version }}</strong>

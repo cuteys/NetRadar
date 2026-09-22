@@ -28,7 +28,6 @@ func NewDeltaTracker() *DeltaTracker {
 	}
 }
 
-// ProcessConntrack 处理连接跟踪原始条目并计算流量增量
 func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackEntry) (*model.NodeMetricsPayload, []*model.DeviceStats) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
@@ -44,7 +43,6 @@ func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackE
 	var totalDeltaIn int64
 	var totalDeltaOut int64
 
-	// 重置终端当前周期速率
 	for _, dev := range dt.deviceTotals {
 		dev.RateInBps = 0
 		dev.RateOutBps = 0
@@ -56,14 +54,13 @@ func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackE
 		srcIsPrivate := IsPrivateIP(e.Src1)
 		dstIsPrivate := IsPrivateIP(e.Dst1)
 
-		// 忽略纯局域网互访
 		if srcIsPrivate && dstIsPrivate {
 			continue
 		}
 
 		var lanIP, wanIP string
 		var lanPort, wanPort int
-		var bytesOut, bytesIn int64 // 发送与接收字节数
+		var bytesOut, bytesIn int64
 
 		if srcIsPrivate && !dstIsPrivate {
 			lanIP = e.Src1
@@ -80,7 +77,6 @@ func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackE
 			bytesIn = e.Bytes1
 			bytesOut = e.Bytes2
 		} else {
-			// 网关本身对外通信或双端非内网
 			lanIP = e.Src1
 			lanPort = e.Sport1
 			wanIP = e.Dst1
@@ -100,7 +96,6 @@ func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackE
 				LastSeen:     now,
 			}
 			dt.flows[key] = state
-			// 新连接首次记录基准值，不计算全量历史差额
 			continue
 		}
 
@@ -117,7 +112,6 @@ func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackE
 		state.LastBytesOut = bytesOut
 		state.LastSeen = now
 
-		// 仅在当前周期有流量增量时记录
 		if deltaIn > 0 || deltaOut > 0 {
 			totalDeltaIn += deltaIn
 			totalDeltaOut += deltaOut
@@ -138,7 +132,6 @@ func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackE
 			}
 			activeFlows = append(activeFlows, flowRecord)
 
-			// 统计局域网终端流量
 			if lanIP != "" {
 				dev, ok := dt.deviceTotals[lanIP]
 				if !ok {
@@ -160,7 +153,6 @@ func (dt *DeltaTracker) ProcessConntrack(nodeID string, entries []*RawConntrackE
 		}
 	}
 
-	// 清理超过60秒无活动的流
 	for k, v := range dt.flows {
 		if !seenKeys[k] && now.Sub(v.LastSeen) > 60*time.Second {
 			delete(dt.flows, k)

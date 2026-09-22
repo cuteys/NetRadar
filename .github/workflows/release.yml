@@ -61,43 +61,43 @@ jobs:
       - name: Cross-Compile Binaries
         run: |
           mkdir -p bin dist_release
-          LDFLAGS="-s -w -X main.Version=${VERSION}"
+          LDFLAGS="-s -w -buildid= -X main.Version=${VERSION}"
 
           # -------------------------------------------------------------
           # 1. 编译 NetRadar 控制端 (纯单二进制分发)
           # -------------------------------------------------------------
           # Linux AMD64
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist_release/netradar-linux-amd64 ./server
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="${LDFLAGS}" -o dist_release/netradar-linux-amd64 ./server
 
           # Linux ARM64
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist_release/netradar-linux-arm64 ./server
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="${LDFLAGS}" -o dist_release/netradar-linux-arm64 ./server
 
           # Linux ARMv7 (32位 ARM 设备)
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="${LDFLAGS}" -o dist_release/netradar-linux-armv7 ./server
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags="${LDFLAGS}" -o dist_release/netradar-linux-armv7 ./server
 
           # macOS (Intel & Apple Silicon)
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist_release/netradar-darwin-amd64 ./server
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist_release/netradar-darwin-arm64 ./server
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="${LDFLAGS}" -o dist_release/netradar-darwin-amd64 ./server
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="${LDFLAGS}" -o dist_release/netradar-darwin-arm64 ./server
 
           # -------------------------------------------------------------
           # 2. 编译 NetRadar 边缘探针 (纯单二进制分发，零解压依赖)
           # -------------------------------------------------------------
           # Linux AMD64
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist_release/agent-linux-amd64 ./agent
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="${LDFLAGS}" -o dist_release/agent-linux-amd64 ./agent
 
           # Linux ARM64 (主流家用 OpenWrt 路由器，如小米 AX6000 / AX9000 等)
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist_release/agent-linux-arm64 ./agent
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="${LDFLAGS}" -o dist_release/agent-linux-arm64 ./agent
 
           # Linux ARMv7
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="${LDFLAGS}" -o dist_release/agent-linux-armv7 ./agent
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags="${LDFLAGS}" -o dist_release/agent-linux-armv7 ./agent
 
           # Linux MIPSLE / MIPS (软浮点，专为老款联发科 MT7621 小米/红米等 OpenWrt 路由器定制)
-          CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -ldflags="${LDFLAGS}" -o dist_release/agent-linux-mipsle ./agent
-          CGO_ENABLED=0 GOOS=linux GOARCH=mips GOMIPS=softfloat go build -ldflags="${LDFLAGS}" -o dist_release/agent-linux-mips ./agent
+          CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -trimpath -ldflags="${LDFLAGS}" -o dist_release/agent-linux-mipsle ./agent
+          CGO_ENABLED=0 GOOS=linux GOARCH=mips GOMIPS=softfloat go build -trimpath -ldflags="${LDFLAGS}" -o dist_release/agent-linux-mips ./agent
 
           # macOS (Intel & Apple Silicon)
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist_release/agent-darwin-amd64 ./agent
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist_release/agent-darwin-arm64 ./agent
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="${LDFLAGS}" -o dist_release/agent-darwin-amd64 ./agent
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="${LDFLAGS}" -o dist_release/agent-darwin-arm64 ./agent
 
           # 生成 SHA256 校验和文件
           cd dist_release

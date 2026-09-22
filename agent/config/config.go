@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/rand"
 	"flag"
 	"fmt"
 	"log"
@@ -8,8 +9,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 type AgentConfig struct {
@@ -22,17 +21,25 @@ type AgentConfig struct {
 	Mock       bool
 }
 
+func generateUUID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
 func LoadConfig() *AgentConfig {
 	cfg := &AgentConfig{}
 	var deprecatedNodeName string
 
-	flag.StringVar(&cfg.ConfigFile, "c", getEnv("NETRADAR_CONFIG", "config.yaml"), "配置文件路径")
-	flag.StringVar(&cfg.ServerURL, "server", "", "服务端 WebSocket 地址")
-	flag.StringVar(&cfg.Token, "token", "", "通信密钥 Token")
-	flag.StringVar(&cfg.NodeID, "node-id", "", "节点唯一标识")
-	flag.StringVar(&deprecatedNodeName, "node-name", "", "已废弃，节点名称由服务端统一管理")
-	flag.IntVar(&cfg.Interval, "interval", 0, "采集上报间隔 (秒)")
-	flag.BoolVar(&cfg.Mock, "mock", false, "模拟流量生成测试")
+	flag.StringVar(&cfg.ConfigFile, "c", getEnv("NETRADAR_CONFIG", "config.yaml"), "")
+	flag.StringVar(&cfg.ServerURL, "server", "", "")
+	flag.StringVar(&cfg.Token, "token", "", "")
+	flag.StringVar(&cfg.NodeID, "node-id", "", "")
+	flag.StringVar(&deprecatedNodeName, "node-name", "", "")
+	flag.IntVar(&cfg.Interval, "interval", 0, "")
+	flag.BoolVar(&cfg.Mock, "mock", false, "")
 
 	flag.Parse()
 
@@ -47,7 +54,7 @@ func LoadConfig() *AgentConfig {
 		cfg.Token = getEnv("NETRADAR_TOKEN", "netradar_secret_token_12345")
 	}
 	if cfg.NodeID == "" {
-		cfg.NodeID = getEnv("NETRADAR_NODE_ID", uuid.New().String())
+		cfg.NodeID = getEnv("NETRADAR_NODE_ID", generateUUID())
 	}
 	if cfg.Interval <= 0 {
 		cfg.Interval = 2
@@ -101,8 +108,7 @@ func saveStandardYAML(path string, cfg *AgentConfig) {
 		_ = os.MkdirAll(dir, 0755)
 	}
 
-	content := fmt.Sprintf(`# NetRadar Agent 配置文件
-server: "%s"
+	content := fmt.Sprintf(`server: "%s"
 token: "%s"
 uuid: "%s"
 interval: %d

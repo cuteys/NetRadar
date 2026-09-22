@@ -20,7 +20,7 @@ import (
 //go:embed dist/*
 var embeddedDist embed.FS
 
-var Version = "v0.1.5"
+var Version = "v0.1.6"
 
 func main() {
 	cfg := config.LoadConfig()

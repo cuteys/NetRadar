@@ -152,7 +152,21 @@ fi
 log_info "对接服务端: ${WS_URL}"
 log_info "探针节点名: ${NODE_NAME}"
 
-OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+RAW_OS="$(uname -s 2>/dev/null || echo 'Linux')"
+case "$RAW_OS" in
+    *Linux*|*linux*)
+        OS="linux"
+        ;;
+    *Darwin*|*darwin*)
+        OS="darwin"
+        ;;
+    *FreeBSD*|*freebsd*)
+        OS="freebsd"
+        ;;
+    *)
+        OS="linux"
+        ;;
+esac
 ARCH="$(uname -m)"
 
 case "$ARCH" in

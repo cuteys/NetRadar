@@ -64,9 +64,8 @@ const nodeOptions = computed<DropdownOption[]>(() => {
     <div class="flex items-center gap-2.5 sm:gap-4 flex-wrap sm:flex-nowrap">
       <!-- Apple Pure Monochromatic Radar Icon + Title -->
       <div class="flex items-center gap-2 sm:gap-2.5">
-        <div class="relative flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm flex-shrink-0">
+        <div class="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm flex-shrink-0">
           <Radar class="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500 dark:text-emerald-600" />
-          <span class="absolute -top-0.5 -right-0.5 flex h-2 w-2 rounded-full bg-emerald-500"></span>
         </div>
         <h1 class="font-bold text-base sm:text-lg tracking-tight text-slate-900 dark:text-white">
           NetRadar
