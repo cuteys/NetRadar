@@ -55,7 +55,7 @@ watch(() => props.open, (val) => {
 const installCommand = computed(() => {
   const defaultHost = typeof window !== 'undefined' ? window.location.host : '127.0.0.1:8899'
   const host = radar.systemSettings?.agent_server_addr || defaultHost
-  const token = radar.systemSettings?.agent_token || 'netradar_secret_token_12345'
+  const token = radar.systemSettings?.agent_token || ''
   const tls = radar.systemSettings?.use_tls ? ' --tls' : ''
   const proxyPrefix = useGhProxy.value ? 'https://gh-proxy.com/' : ''
   return `curl -fsSL -k ${proxyPrefix}https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh | sh -s -- -s "${host}" -t "${token}"${tls}`
@@ -70,7 +70,7 @@ const rawBinaryCommand = computed(() => {
   const proto = radar.systemSettings?.use_tls ? 'wss:' : 'ws:'
   const defaultHost = typeof window !== 'undefined' ? window.location.host : '127.0.0.1:8899'
   const host = radar.systemSettings?.agent_server_addr || defaultHost
-  const token = radar.systemSettings?.agent_token || 'netradar_secret_token_12345'
+  const token = radar.systemSettings?.agent_token || ''
   return `./agent -server "${proto}//${host}/ws/agent" -token "${token}"`
 })
 

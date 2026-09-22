@@ -28,6 +28,10 @@ func main() {
 	cfg := config.LoadConfig()
 	cfg.Version = Version
 
+	if strings.TrimSpace(cfg.Token) == "" {
+		log.Fatalf("[探针错误] 必须配置通信 Token！请通过 -token 命令行参数、NETRADAR_TOKEN 环境变量或在配置文件 %s 中指定有效 Token。", cfg.ConfigFile)
+	}
+
 	log.Printf("=== NetRadar 探针 (%s) ===", Version)
 	log.Printf("节点 ID:   %s", cfg.NodeID)
 	log.Printf("系统架构:   %s/%s", runtime.GOOS, runtime.GOARCH)

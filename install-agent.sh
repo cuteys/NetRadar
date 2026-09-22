@@ -407,6 +407,62 @@ if [ "$DOWNLOAD_SUCCESS" = false ] || [ ! -s "${TMP_DIR}/agent" ]; then
     log_error "所有加速源与直连均下载失败！\n=======================================================\n可能原因：路由器当前 DNS 无法解析镜像站或外部网络被阻断。\n备选方案：您可在路由器终端手动执行单行下载命令：\n  mkdir -p ${INSTALL_DIR} && curl -fsSL -k \"https://gh-proxy.com/${DIRECT_RAW}\" -o ${AGENT_BIN} && chmod +x ${AGENT_BIN}\n======================================================="
 fi
 
+# 1. 严格校验文件头部魔数 (ELF)，防止下载到 HTML 报错页或损坏文件
+if [ "$OS" = "linux" ]; then
+    if ! dd if="${TMP_DIR}/agent" bs=1 count=4 2>/dev/null | grep -q "ELF"; then
+        rm -rf "$TMP_DIR"
+        log_error "下载的文件非有效 Linux ELF 可执行程序！请检查网络或镜像源状态。"
+    fi
+fi
+
+# 2. 获取并校验官方 SHA-256 签名 (防镜像源投毒或篡改)
+SHA_NAME="sha256sums.txt"
+if [ "$VERSION" != "latest" ]; then
+    DIRECT_SHA="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/${SHA_NAME}"
+else
+    DIRECT_SHA="https://github.com/${GITHUB_REPO}/releases/latest/download/${SHA_NAME}"
+fi
+SHA_SOURCES="
+GitHub-Direct|${DIRECT_SHA}
+gh-proxy.com|https://gh-proxy.com/${DIRECT_SHA}
+"
+
+log_info "正在获取官方发布校验和清单 (sha256sums.txt)..."
+SHA_FETCHED=false
+for item in $SHA_SOURCES; do
+    s_name=$(echo "$item" | cut -d'|' -f1)
+    s_url=$(echo "$item" | cut -d'|' -f2)
+    if [ -n "$s_name" ] && [ -n "$s_url" ]; then
+        if try_fetch "$s_url" "${TMP_DIR}/sha256sums.txt" "${s_name}"; then
+            SHA_FETCHED=true
+            break
+        fi
+    fi
+done
+
+if [ "$SHA_FETCHED" = true ] && [ -s "${TMP_DIR}/sha256sums.txt" ]; then
+    EXPECTED_HASH=$(grep -E "[[:space:]]\*?${RAW_NAME}$" "${TMP_DIR}/sha256sums.txt" | awk '{print $1}' || true)
+    if [ -n "$EXPECTED_HASH" ]; then
+        if command -v sha256sum >/dev/null 2>&1; then
+            ACTUAL_HASH=$(sha256sum "${TMP_DIR}/agent" | awk '{print $1}')
+            if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
+                rm -rf "$TMP_DIR"
+                log_error "文件 SHA-256 完整性校验失败！(预期: ${EXPECTED_HASH}, 实际: ${ACTUAL_HASH})\n文件可能已被篡改或下载损坏，已终止安装以保障系统安全！"
+            fi
+            log_info "SHA-256 完整性校验通过 (${ACTUAL_HASH})"
+        elif command -v openssl >/dev/null 2>&1; then
+            ACTUAL_HASH=$(openssl dgst -sha256 "${TMP_DIR}/agent" | awk '{print $NF}')
+            if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
+                rm -rf "$TMP_DIR"
+                log_error "文件 SHA-256 完整性校验失败！(预期: ${EXPECTED_HASH}, 实际: ${ACTUAL_HASH})\n文件可能已被篡改或下载损坏，已终止安装以保障系统安全！"
+            fi
+            log_info "SHA-256 完整性校验通过 (${ACTUAL_HASH})"
+        else
+            log_warn "系统未安装 sha256sum 或 openssl 工具，跳过本地哈希计算"
+        fi
+    fi
+fi
+
 if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet netradar-agent 2>/dev/null; then
     systemctl stop netradar-agent 2>/dev/null || true
 fi

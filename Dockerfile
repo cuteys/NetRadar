@@ -17,7 +17,8 @@ ARG TARGETARCH
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
-COPY . .
+COPY pkg/ ./pkg/
+COPY server/ ./server/
 # Copy compiled web dist into server embedded dir
 COPY --from=web-builder /app/server/dist ./server/dist
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -ldflags="-s -w" -o /netradar ./server
@@ -30,7 +31,6 @@ RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 
 COPY --from=go-builder /netradar /app/netradar
-COPY install-agent.sh /app/install-agent.sh
 
 EXPOSE 8899
 VOLUME ["/data"]

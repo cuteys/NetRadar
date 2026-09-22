@@ -169,7 +169,7 @@ func LoadConfig() *AgentConfig {
 		cfg.ServerURL = utils.GetEnv("NETRADAR_SERVER", "ws://127.0.0.1:8899/ws/agent")
 	}
 	if cfg.Token == "" {
-		cfg.Token = utils.GetEnv("NETRADAR_TOKEN", "netradar_secret_token_12345")
+		cfg.Token = utils.GetEnv("NETRADAR_TOKEN", "")
 	}
 	if cfg.NodeID == "" {
 		cfg.NodeID = utils.GetEnv("NETRADAR_NODE_ID", getStableHardwareUUID())

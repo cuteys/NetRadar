@@ -1,6 +1,8 @@
 package updater
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -165,9 +167,20 @@ func performUpdate(rel *githubRelease, targetTag string) error {
 		downloadURL = fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s", repoOwner, repoName, targetTag, assetName)
 	}
 
+	// 1. 获取并解析官方发布的 SHA-256 校验清单
+	checksums, err := fetchChecksums(rel, targetTag)
+	if err != nil {
+		return fmt.Errorf("获取 SHA-256 校验清单失败: %w", err)
+	}
+
+	expectedHash, ok := checksums[assetName]
+	if !ok || expectedHash == "" {
+		return fmt.Errorf("发布清单中未找到 %s 的 SHA-256 校验和", assetName)
+	}
+
 	urls := []string{
-		"https://gh-proxy.com/" + downloadURL,
 		downloadURL,
+		"https://gh-proxy.com/" + downloadURL,
 	}
 
 	execPath, err := os.Executable()
@@ -222,8 +235,21 @@ func performUpdate(rel *githubRelease, targetTag string) error {
 	}
 
 	if !downloaded {
-		return fmt.Errorf("下载失败")
+		return fmt.Errorf("下载失败或文件不完整")
 	}
+
+	// 2. 严格校验文件头部魔数 (ELF/PE/Mach-O，防止中间人注入 HTML 报错页或损坏文件)
+	if err := validateExecutableHeader(tmpFile); err != nil {
+		_ = os.Remove(tmpFile)
+		return fmt.Errorf("二进制格式合法性校验失败: %w", err)
+	}
+
+	// 3. 严格比对 SHA-256 校验和 (防止第三方镜像篡改/投毒)
+	if err := verifyFileChecksum(tmpFile, expectedHash); err != nil {
+		_ = os.Remove(tmpFile)
+		return fmt.Errorf("SHA-256 完整性校验未通过: %w", err)
+	}
+	log.Printf("[更新] SHA-256 完整性校验通过 (%s)，二进制格式合法", expectedHash)
 
 	if err := os.Chmod(tmpFile, 0755); err != nil {
 		return fmt.Errorf("修改权限失败: %w", err)
@@ -234,6 +260,125 @@ func performUpdate(rel *githubRelease, targetTag string) error {
 
 	log.Printf("[更新] 已升级到 %s，正在执行平滑自重启...", targetTag)
 	restartProcess(execPath)
+	return nil
+}
+
+func fetchChecksums(rel *githubRelease, targetTag string) (map[string]string, error) {
+	downloadURL := ""
+	for _, asset := range rel.Assets {
+		if asset.Name == "sha256sums.txt" {
+			downloadURL = asset.BrowserDownloadURL
+			break
+		}
+	}
+	if downloadURL == "" {
+		downloadURL = fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/sha256sums.txt", repoOwner, repoName, targetTag)
+	}
+
+	urls := []string{
+		downloadURL,
+		"https://gh-proxy.com/" + downloadURL,
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	var lastErr error
+
+	for _, u := range urls {
+		req, err := http.NewRequest("GET", u, nil)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		req.Header.Set("User-Agent", "NetRadar-Agent-Updater")
+
+		resp, err := client.Do(req)
+		if err != nil || resp.StatusCode != http.StatusOK {
+			if resp != nil {
+				resp.Body.Close()
+			}
+			lastErr = fmt.Errorf("请求 %s 失败", u)
+			continue
+		}
+
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024))
+		resp.Body.Close()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		checksums := make(map[string]string)
+		lines := strings.Split(string(body), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				hash := strings.TrimSpace(fields[0])
+				name := strings.TrimPrefix(strings.TrimSpace(fields[1]), "*")
+				checksums[name] = hash
+			}
+		}
+
+		if len(checksums) > 0 {
+			return checksums, nil
+		}
+	}
+
+	return nil, fmt.Errorf("未能获取或解析 sha256sums.txt: %v", lastErr)
+}
+
+func verifyFileChecksum(filePath, expectedHex string) error {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("打开文件失败: %w", err)
+	}
+	defer f.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, f); err != nil {
+		return fmt.Errorf("计算哈希失败: %w", err)
+	}
+
+	actualHex := hex.EncodeToString(hasher.Sum(nil))
+	if !strings.EqualFold(actualHex, strings.TrimSpace(expectedHex)) {
+		return fmt.Errorf("校验和不匹配 (预期: %s, 实际: %s)", expectedHex, actualHex)
+	}
+	return nil
+}
+
+func validateExecutableHeader(filePath string) error {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("打开文件失败: %w", err)
+	}
+	defer f.Close()
+
+	header := make([]byte, 16)
+	n, err := f.Read(header)
+	if err != nil || n < 4 {
+		return fmt.Errorf("读取二进制头部失败或文件长度过短")
+	}
+
+	switch runtime.GOOS {
+	case "linux":
+		if header[0] != 0x7f || header[1] != 'E' || header[2] != 'L' || header[3] != 'F' {
+			return fmt.Errorf("非合法 Linux ELF 二进制头部")
+		}
+	case "darwin":
+		if !(header[0] == 0xfe && header[1] == 0xed && header[2] == 0xfa && (header[3] == 0xce || header[3] == 0xcf)) &&
+			!(header[0] == 0xcf && header[1] == 0xfa && header[2] == 0xed && header[3] == 0xfe) &&
+			!(header[0] == 0xca && header[1] == 0xfe && header[2] == 0xba && header[3] == 0xbe) {
+			return fmt.Errorf("非合法 macOS Mach-O 二进制头部")
+		}
+	case "windows":
+		if header[0] != 'M' || header[1] != 'Z' {
+			return fmt.Errorf("非合法 Windows PE 二进制头部")
+		}
+	}
+
 	return nil
 }
 

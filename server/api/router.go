@@ -50,32 +50,6 @@ func NewRouter(authSvc *auth.AuthService, handler *APIHandler, hub *ws.Hub, stat
 		}
 	}))
 
-	mux.HandleFunc("/install-agent.sh", func(w http.ResponseWriter, r *http.Request) {
-		data, err := os.ReadFile("install-agent.sh")
-		if err != nil {
-			http.Redirect(w, r, "https://raw.githubusercontent.com/cuteys/NetRadar/master/install-agent.sh", http.StatusFound)
-			return
-		}
-
-		serverAddr := hub.GetAgentServerAddr()
-		if serverAddr == "" {
-			serverAddr = r.Host
-		}
-		token := hub.GetAgentToken()
-		useTLS := "false"
-		if hub.GetUseTLS() {
-			useTLS = "true"
-		}
-
-		content := string(data)
-		content = strings.Replace(content, `SERVER_ADDR=""`, `SERVER_ADDR="`+serverAddr+`"`, 1)
-		content = strings.Replace(content, `AGENT_TOKEN=""`, `AGENT_TOKEN="`+token+`"`, 1)
-		content = strings.Replace(content, `USE_TLS=false`, `USE_TLS=`+useTLS, 1)
-
-		w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
-		_, _ = w.Write([]byte(content))
-	})
-
 	if staticFS != nil {
 		fileServer := http.FileServer(http.FS(staticFS))
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
