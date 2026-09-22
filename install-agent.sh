@@ -69,15 +69,23 @@ do_uninstall() {
 
     if [ -f "/etc/crontabs/root" ]; then
         sed -i '/netradar/d' /etc/crontabs/root 2>/dev/null || true
-        /etc/init.d/cron restart 2>/dev/null || true
+        /etc/init.d/cron restart 2>/dev/null || crond restart 2>/dev/null || true
     fi
 
-    killall agent 2>/dev/null || true
-    pkill -9 -f "netradar/agent" 2>/dev/null || true
+    # 清理 sysctl 持久化
+    rm -f /etc/sysctl.d/99-netradar.conf 2>/dev/null || true
+    if [ -f "/etc/sysctl.conf" ]; then
+        sed -i '/net\.netfilter\.nf_conntrack_acct/d' /etc/sysctl.conf 2>/dev/null || true
+    fi
+
+    # 终止探针与拉起脚本进程（精准匹配，不误伤系统其他 agent 服务）
+    pkill -9 -f "/netradar/agent" 2>/dev/null || true
+    pkill -9 -f "start_agent\.sh" 2>/dev/null || true
     pkill -9 -f "agent.*-server" 2>/dev/null || true
 
-    rm -rf /opt/netradar/agent /data/netradar/agent /etc/netradar/agent
-    rm -f /usr/local/bin/agent /usr/bin/agent_netradar
+    # 清除程序文件、配置与临时日志
+    rm -rf /opt/netradar /data/netradar /etc/netradar /tmp/netradar
+    rm -f /usr/local/bin/agent /usr/bin/agent_netradar /tmp/netradar-agent.log /tmp/netradar_install*
     rmdir /opt/netradar 2>/dev/null || true
     rmdir /data/netradar 2>/dev/null || true
     rmdir /etc/netradar 2>/dev/null || true
